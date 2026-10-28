@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from keeper_core.adapters import IdempotencyConflict
-from keeper_core.contracts import ModelMetadata, TriageBucket, TriageResult
+from keeper_core.contracts import EmailRecord, IngestionMetadata, ModelMetadata, TriageBucket, TriageResult
 from keeper_core.db import migrate
 from keeper_core.ingest import insert_email_once
 from keeper_core.time import from_storage, to_storage
@@ -24,6 +24,31 @@ def _result(row):
         deadline_evidence=row["deadline_evidence"], confidence=row["confidence"],
         model=model, classified_at=from_storage(row["classified_at"]),
     )
+
+
+def _email(row):
+    return EmailRecord(
+        id=row["id"], provider=row["provider"], provider_id=row["provider_id"], thread_id=row["thread_id"],
+        sender=row["sender"], subject=row["subject"], received_at=from_storage(row["received_at"]),
+        body_excerpt=row["body_excerpt"], labels=tuple(json.loads(row["labels_json"])),
+        raw_link_reference=row["raw_link_reference"],
+        ingestion=IngestionMetadata(from_storage(row["ingested_at"]), row["ingestion_run_id"], row["ingestion_source"]),
+    )
+
+
+def saved_decisions(path):
+    """Every saved (email, triage result) pair, oldest email first. Read-only."""
+    path = Path(path)
+    if not path.exists():
+        return []
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as conn:
+        conn.row_factory = sqlite3.Row
+        emails = {row["id"]: _email(row) for row in conn.execute("SELECT * FROM email_records")}
+        rows = conn.execute(
+            "SELECT t.* FROM triage_results t JOIN email_records e ON e.id = t.email_id "
+            "ORDER BY e.received_at, e.id"
+        ).fetchall()
+    return [(emails[row["email_id"]], _result(row)) for row in rows]
 
 
 @dataclass(frozen=True)

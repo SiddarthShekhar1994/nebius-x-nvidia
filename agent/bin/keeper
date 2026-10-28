@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keeper's command line inside the sandbox: keeper {memory|skills|router|health|triage} ...
+# Keeper's command line inside the sandbox: keeper {memory|skills|router|health|triage|act} ...
 set -euo pipefail
 umask 077
 APP_DIR="${KEEPER_APP_DIR:-/sandbox/keeper/app}"
@@ -27,10 +27,13 @@ case "${1:-}" in
   health)
     shift
     exec "$PY" -m integrations.health "$@" ;;
+  act)
+    shift
+    exec "$PY" -m actions "$@" ;;
   memory|skills|router|triage)
     cmd="$1"; shift
     exec "$PY" -m "$cmd" "$@" ;;
   *)
-    echo "usage: keeper {memory|skills|router|health|triage} ..." >&2
+    echo "usage: keeper {memory|skills|router|health|triage|act} ..." >&2
     exit 2 ;;
 esac
