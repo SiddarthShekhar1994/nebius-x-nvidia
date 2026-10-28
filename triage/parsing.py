@@ -34,6 +34,10 @@ def parse_payload(content: str) -> dict:
     if data["career"] is not None and type(data["career"]) is not bool:
         _invalid("career must be boolean or null")
     signals = data["scam_signals"]
+    if isinstance(signals, str):
+        # Nemotron Nano sometimes answers "a, b" instead of a JSON array.
+        signals = [signal.strip() for signal in signals.split(",") if signal.strip()]
+        data["scam_signals"] = signals
     if not isinstance(signals, list) or len(signals) > 20 or any(
         not isinstance(signal, str) or not 1 <= len(signal.strip()) <= 80 for signal in signals
     ):

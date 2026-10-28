@@ -64,6 +64,14 @@ Phase 3 ingestion; version 2 database upgrade; approved corrections; private
 runtime token validation; partial fatal reports; and the real shell launcher.
 No live provider calls occur in these tests.
 
+## First live finding
+
+The first live preview (5 emails, Nano) returned review for every email. The model
+answered correctly but sent scam_signals as a comma-separated string, which the
+strict parser rejected, and one email likely ran out of tokens while reasoning.
+Prompt triage-v2 asks for a JSON array and names the failed check on retry, the
+parser accepts the string form, and max_tokens is 4096. See NOTES_FEEDBACK.md note 26.
+
 ## Live acceptance for the teammate
 
 Use triage/README.md's exact commands, with a disposable seeded Gmail account,

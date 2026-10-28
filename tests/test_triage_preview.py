@@ -40,6 +40,8 @@ class RouterModelTest(unittest.TestCase):
                 answer = RouterModel(settings=settings, client=client).complete("triage", "Email content")
             self.assertEqual(requests[0]["model"], settings.models["nano"])
             self.assertNotIn("tools", requests[0])
+            # Nano reasons before answering; a small cap cut answers off live.
+            self.assertGreaterEqual(requests[0]["max_tokens"], 4096)
             self.assertEqual(requests[0]["messages"][0]["role"], "system")
             self.assertEqual(answer.metadata.requested_model, settings.models["nano"])
             self.assertEqual(answer.metadata.served_model, "served-nano")

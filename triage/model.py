@@ -30,7 +30,7 @@ class RouterModel:
         try:
             response = route(
                 "triage", [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
-                settings=self.settings, client=self.client, max_tokens=1024, temperature=0,
+                settings=self.settings, client=self.client, max_tokens=4096, temperature=0,
             )
         except openai.APIConnectionError:
             raise ProviderUnavailable("Nebius connection unavailable") from None

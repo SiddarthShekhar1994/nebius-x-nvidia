@@ -210,7 +210,7 @@ class TriageBoundaryTest(unittest.TestCase):
             [], {"bucket": "junk"}, payload(extra="unexpected"),
             payload(bucket=[]), payload(bucket={}), payload(bucket=4),
             payload(bucket="unknown"), payload(reason=""), payload(reason=3),
-            payload(career=1), payload(scam_signals="fee"),
+            payload(career=1), payload(scam_signals=5), payload(scam_signals={"fee": True}),
             payload(scam_signals=[None]), payload(confidence=True),
             payload(confidence=float("nan")), payload(confidence=1.1),
             payload(deadline_evidence=3),
@@ -220,6 +220,39 @@ class TriageBoundaryTest(unittest.TestCase):
                 result = classify_email(email(), FakeModel(value), classified_at=UTC_TIME)
                 self.assertIsNone(result.bucket)
                 self.assertIsNone(result.confidence)
+
+    def test_comma_separated_scam_signals_become_a_list(self):
+        # Seen from live Nemotron Nano: the signals came back as one string.
+        result = classify_email(
+            email(sender="news@example.test", subject="Weekly digest", body="Updates"),
+            FakeModel(payload(scam_signals="prize_claim, payment_request")), classified_at=UTC_TIME,
+        )
+        self.assertIs(result.bucket, TriageBucket.NEWSLETTER)
+        self.assertIn("prize_claim", result.scam_signals)
+        self.assertIn("payment_request", result.scam_signals)
+        empty = classify_email(
+            email(sender="news@example.test", subject="Weekly digest", body="Updates"),
+            FakeModel(payload(scam_signals=" , ")), classified_at=UTC_TIME,
+        )
+        self.assertEqual(empty.scam_signals, ())
+
+    def test_retry_prompt_names_the_validation_error_not_the_response(self):
+        class RepairModel(FakeModel):
+            def complete(self, task_type, prompt):
+                answer = super().complete(task_type, prompt)
+                if len(self.calls) == 1:
+                    return ModelAnswer(json.dumps(payload(career="private text")), answer.metadata)
+                return answer
+        model = RepairModel(payload())
+        classify_email(email(), model, classified_at=UTC_TIME)
+        retry = model.calls[-1][1]
+        self.assertIn("career must be boolean or null", retry)
+        self.assertNotIn("private text", retry)
+
+    def test_prompt_asks_for_an_array_of_scam_signals(self):
+        model = FakeModel(payload())
+        classify_email(email(), model, classified_at=UTC_TIME)
+        self.assertIn("JSON array", model.calls[0][1])
 
     def test_a_repaired_response_succeeds_after_one_retry(self):
         class RepairModel(FakeModel):
