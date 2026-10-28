@@ -1,4 +1,4 @@
-"""The shape every action step shares, so the three owners can build in parallel.
+"""The shape every action step shares. Each step is a thin wrapper over keeper_core.
 
 A step is a module with:
     NAME: str
@@ -12,6 +12,7 @@ returns status "planned" with what it would do.
 """
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -23,10 +24,10 @@ from keeper_core.adapters import CalendarAdapter, GmailAdapter, ModelAdapter
 DONE = "done"                   # created or changed something
 ALREADY_DONE = "already_done"   # a previous run did it; nothing changed
 PLANNED = "planned"             # dry run: would have done it
-SKIPPED = "skipped"             # wanted the email but decided not to act, with a reason
+SKIPPED = "skipped"             # nothing to do for this email, with a reason
+REVIEW = "review"               # Keeper won't act without a person: unknown company, past date, ...
 FAILED = "failed"               # provider or data error; detail says which class, never secrets
-NOT_BUILT = "not_built"         # placeholder until the owner's module lands
-STATUSES = (DONE, ALREADY_DONE, PLANNED, SKIPPED, FAILED, NOT_BUILT)
+STATUSES = (DONE, ALREADY_DONE, PLANNED, SKIPPED, REVIEW, FAILED)
 
 
 @dataclass(frozen=True)
@@ -50,3 +51,22 @@ class Outcome:
     def __post_init__(self):
         if self.status not in STATUSES:
             raise ValueError(f"unknown outcome status {self.status!r}")
+
+
+def connect(db_path: Path, *, read_only: bool = False) -> sqlite3.Connection:
+    """A connection with foreign keys on; read-only when nothing may change (dry runs)."""
+    if read_only:
+        conn = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+    else:
+        conn = sqlite3.connect(db_path, timeout=10)
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
+def linked_application(conn: sqlite3.Connection, email_id: str) -> tuple[str, str] | None:
+    """(application ID, opportunity ID) for an application this email is recorded as evidence for."""
+    return conn.execute(
+        """SELECT a.id, a.opportunity_id FROM application_source_emails s
+           JOIN applications a ON a.id = s.application_id WHERE s.email_id = ? ORDER BY s.rowid LIMIT 1""",
+        (email_id,),
+    ).fetchone()

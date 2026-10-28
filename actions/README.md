@@ -1,39 +1,34 @@
 # actions: what Keeper does after triage
 
-`keeper act` reads the triage decisions saved in keeper.db and offers each one to three steps, in this order:
+`keeper act` reads the triage decisions saved in keeper.db and offers each one to three steps, in this order. Each step is a thin wrapper: the logic lives in `keeper_core` (Rishi's tracker, deadline and draft code), and this package only decides which emails go where and reports what happened.
 
-| Step | Module | Owner | Picks (starting rule in `wants`) | Does |
+| Step | Wrapper | Logic | Picks | Does |
 | --- | --- | --- | --- | --- |
-| tracker | `tracker.py` | Rishi | career mail, actionable or due, no scam warning | moves an application forward on confirmation, interview and rejection emails |
-| deadlines | `deadlines.py` | Vi | due, with a verified deadline, no scam warning | one calendar event per deadline; an extension moves the existing event |
-| drafts | `drafts.py` | Zayd | actionable, no scam warning | one Gmail draft per email, written by Super; never sent |
+| tracker | `tracker.py` | `keeper_core.application_messages` | career mail, actionable or due, no scam warning | moves a tracked application on confirmation, interview and decision emails |
+| deadlines | `deadlines.py` | `keeper_core.deadlines`, `keeper_core.calendar_deadlines` | due, with a verified deadline, no scam warning | one calendar event per tracked opportunity; an extension moves it |
+| drafts | `drafts.py` | `keeper_core.reply_drafts` | actionable Gmail mail, no scam warning | one unsent Gmail draft, written by Super; never sent |
 
-Each module ships as a working stub that returns `not_built`, so the command runs end to end from day one. An owner replaces `run()` and narrows `wants()` if needed. The tracker's starting rule picks 34 of the 75 fixture emails; it should end up acting only on confirmations, interviews and rejections, which takes the email text, not just the triage bucket.
+The tracker runs first because it links an email to its application, and the other two use that link.
 
-## The interface (`base.py`)
+## What it won't do on its own
 
-    NAME: str
-    wants(email, result) -> bool
-    run(email, result, ctx) -> Outcome
+Keeper is deliberately conservative, so a step often answers `review` instead of acting:
 
-- `email` is an `EmailRecord`, `result` its saved `TriageResult`.
-- `ctx` is an `ActionContext`: `db_path`, `gmail`, `calendar`, `model`, `now()` (UTC) and `dry_run`.
-- `Outcome(step, email_id, status, detail, provider_id=None)`. Status is one of `done`, `already_done`, `planned`, `skipped`, `failed`, `not_built`. Keep `detail` to one line with no email body and no secrets.
+- **The email must name a tracked opportunity.** The tracker and the calendar only act when the email names both the organization and the role of one opportunity Keeper already tracks (from the radar, or added by hand). Mail about anything else is `review`.
+- **Deadlines must be explicit and in the future.** A past date, more than one date, or a date without a cue word such as "deadline", "apply by" or "applications close" is `review` or `skipped`.
+- **Drafts without context are holding replies.** With no linked application, an unverified sender or a sensitive request, the draft asks a short clarifying question and is flagged for review.
 
-Rules every step follows:
+## Statuses
 
-1. **Idempotent.** Running `keeper act` twice creates nothing new the second time. Build IDs and provider idempotency keys with `keeper_core.workflow.stable_key`, and return `already_done` when the work exists.
-2. **Dry run touches nothing.** When `ctx.dry_run` is true, no provider calls and no database writes; return `planned` with what would happen.
-3. **Provider errors are fine to raise.** `act()` turns an `AdapterError` into a `failed` outcome for that one email and carries on. Anything else is a bug and stops the run.
-4. **Never send email.** Drafts only. There is no send call in any adapter, and there must not be one here.
-5. **Skip scams.** Every starting rule already excludes results with scam warnings; keep it that way.
+`done`, `already_done` (an earlier run did it), `planned` (dry run), `skipped` (nothing to do), `review` (needs a person, with the reason), `failed` (a provider error, by class name only).
 
 ## Running it
 
-    python -m triage run --save --db data/keeper.db      # save decisions first (offline here)
-    python -m actions run --fake --db data/keeper.db     # dry run with offline Gmail and Calendar
-    python -m actions run --fake --apply --db data/keeper.db
+    python -m triage run --save --db data/keeper.db                     # save decisions first
+    python -m actions run --fake --db data/keeper.db                    # dry run, offline fakes
+    python -m actions run --gmail --account DEMO --token TOKEN --db data/keeper.db            # dry run, real account
+    python -m actions run --gmail --account DEMO --token TOKEN --db data/keeper.db --apply    # act
 
-In the sandbox the same command is `keeper act run ...`. Live Gmail and Calendar wiring (the token and account options, like `triage run --gmail`) is the last piece of the `keeper act` command and is Rishi's; until then the command refuses to run without `--fake`.
+In the sandbox the command is `keeper act run ...`. A dry run never writes to keeper.db or calls a provider. `--gmail` uses the same private runtime token as `triage run --gmail` and refuses a database that belongs to another account. `--fake --apply` refuses a database with Gmail decisions, so offline draft and event IDs never end up next to real ones. Rejected Google or Nebius credentials stop the run with status 2.
 
-Tests: `python -m unittest tests.test_actions`. Add your step's tests next to them, using `keeper_core.fakes` and a temporary database.
+Tests: `python -m unittest tests.test_actions`.

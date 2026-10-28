@@ -1,15 +1,19 @@
-"""Application tracker. Owner: Rishi.
+"""Application tracker: confirmation, interview and decision emails move a tracked application.
 
-Confirmation, interview and rejection emails move an application forward
-through keeper_core.workflow.advance_application, once per email, and record
-the email that caused each change (applications, application_status_changes,
-application_source_emails).
+The logic is keeper_core.application_messages (Rishi). It only acts when the email
+names an organization and role Keeper already tracks; anything uncertain is review.
 """
+from contextlib import closing
+
+from keeper_core.application_messages import (
+    detect_application_signal, process_application_email, resolve_email_application,
+)
 from keeper_core.contracts import TriageBucket
 
-from .base import NOT_BUILT, Outcome
+from .base import ALREADY_DONE, DONE, PLANNED, REVIEW, SKIPPED, Outcome, connect
 
 NAME = "tracker"
+_STATUS = {"updated": DONE, "reused": ALREADY_DONE, "ignored": SKIPPED, "review": REVIEW}
 
 
 def wants(email, result):
@@ -18,4 +22,19 @@ def wants(email, result):
 
 
 def run(email, result, ctx):
-    return Outcome(NAME, email.id, NOT_BUILT, "tracker update not built yet (Rishi)")
+    if ctx.dry_run:
+        detection = detect_application_signal(email)
+        if detection.status != "detected":
+            return Outcome(NAME, email.id, SKIPPED if detection.status == "none" else REVIEW, detection.reason)
+        with closing(connect(ctx.db_path, read_only=True)) as conn:
+            identity = resolve_email_application(conn, email)
+        if identity.status != "matched":
+            return Outcome(NAME, email.id, REVIEW, identity.reason)
+        return Outcome(NAME, email.id, PLANNED, f"would record: {detection.signal.reason}")
+    with closing(connect(ctx.db_path)) as conn, conn:
+        processed = process_application_email(conn, email)
+    status = _STATUS[processed.status]
+    detail = processed.reason
+    if status == DONE and processed.application is not None:
+        detail += f"; application is now {processed.application.status.value}"
+    return Outcome(NAME, email.id, status, detail)

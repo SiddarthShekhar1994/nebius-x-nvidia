@@ -113,6 +113,12 @@ def _identity_from_message(conn: sqlite3.Connection, email: EmailRecord) -> tupl
     return None, None
 
 
+def resolve_email_application(conn: sqlite3.Connection, email: EmailRecord) -> IdentityResolution:
+    """Which tracked application this message names, using the same rule as tracker updates. Read-only."""
+    organization, title = _identity_from_message(conn, email)
+    return resolve_message_application(conn, organization=organization, title=title)
+
+
 def process_application_email(
     conn: sqlite3.Connection, email: EmailRecord, *,
     organization: str | None = None, title: str | None = None,

@@ -1,12 +1,14 @@
-"""Reply drafts. Owner: Zayd.
+"""Reply drafts: one unsent Gmail draft per actionable email, written by Super. Never sent.
 
-One Gmail draft per actionable email, written by Super through the router and
-saved with GmailAdapter.create_draft. Keeper never sends: there is no send call
-anywhere, and drafts are recorded in draft_records with requires_review set.
+The logic is keeper_core.reply_drafts (Rishi). Without a linked tracked application, or for an
+unverified sender or a sensitive request, the draft is a short holding reply flagged for review.
 """
-from keeper_core.contracts import TriageBucket
+from contextlib import closing
 
-from .base import NOT_BUILT, Outcome
+from keeper_core.contracts import TriageBucket
+from keeper_core.reply_drafts import create_reply_draft
+
+from .base import ALREADY_DONE, DONE, PLANNED, SKIPPED, Outcome, connect, linked_application
 
 NAME = "drafts"
 
@@ -16,4 +18,16 @@ def wants(email, result):
 
 
 def run(email, result, ctx):
-    return Outcome(NAME, email.id, NOT_BUILT, "reply draft not built yet (Zayd)")
+    if email.provider != "gmail":
+        return Outcome(NAME, email.id, SKIPPED, "drafts are only saved for Gmail messages")
+    with closing(connect(ctx.db_path, read_only=True)) as conn:
+        linked = linked_application(conn, email.id)
+    if ctx.dry_run:
+        note = "" if linked else ", flagged for review (no tracked application)"
+        return Outcome(NAME, email.id, PLANNED, "would save an unsent reply draft" + note)
+    draft = create_reply_draft(ctx.db_path, ctx.gmail, ctx.model, email.id, now=ctx.now(),
+                               application_id=linked[0] if linked else None)
+    detail = "unsent reply draft saved"
+    if draft.review_flags:
+        detail += " for review: " + ", ".join(draft.review_flags)
+    return Outcome(NAME, email.id, ALREADY_DONE if draft.reused else DONE, detail, draft.provider_draft_id)
