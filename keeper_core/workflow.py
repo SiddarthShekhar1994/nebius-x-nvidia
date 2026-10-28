@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
 from dataclasses import replace
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -57,6 +59,26 @@ def opportunity_key(url: str, organization: str, title: str) -> str:
     return stable_key("opportunity", canonical_url(url), normalized_org, normalized_title)
 
 
+def normalize_identity(value: str) -> str:
+    """Normalize display names without guessing synonyms or abbreviations."""
+    value = unicodedata.normalize("NFKC", value).casefold()
+    return " ".join(re.findall(r"[^\W_]+", value, flags=re.UNICODE))
+
+
+def organization_key(organization: str) -> str:
+    normalized = normalize_identity(organization)
+    if not normalized:
+        raise ValueError("organization is required")
+    return stable_key("organization", normalized)
+
+
+def opportunity_identity_key(organization: str, title: str) -> str:
+    normalized_title = normalize_identity(title)
+    if not normalized_title:
+        raise ValueError("title is required")
+    return stable_key("opportunity-identity", organization_key(organization), normalized_title)
+
+
 def resolve_triage_bucket(proposed: TriageBucket | None, career: bool | None) -> TriageBucket | None:
     """Career or unverified career mail cannot be put in junk automatically."""
     if proposed is TriageBucket.JUNK and career is not False:
@@ -73,6 +95,7 @@ def advance_application(
     source_email_id: str | None = None,
     correction: CorrectionRecord | None = None,
     decision_outcome: str | None = None,
+    source_evidence: str | None = None,
 ) -> Application:
     """Apply one evidence-backed transition, returning the original on replay/stale mail.
 
@@ -83,6 +106,8 @@ def advance_application(
         raise ValueError("changed_at must be UTC")
     if not reason.strip():
         raise ValueError("transition needs a reason")
+    if source_evidence is not None and not source_evidence.strip():
+        raise ValueError("source evidence cannot be blank")
     manual = correction is not None
     if manual and source_email_id is not None:
         raise ValueError("manual transitions cannot use a source email")
@@ -100,12 +125,17 @@ def advance_application(
     change_id = stable_key("application-change", application.id, event_key)
     for old in application.status_history:
         if old.id == change_id:
-            if old.status != status:
-                raise TransitionConflict("same event proposes a different status")
+            if old.status != status or (
+                status is ApplicationStatus.DECISION
+                and decision_outcome != old.decision_outcome
+            ):
+                raise TransitionConflict("same event proposes a different status or outcome")
             return application
     if not manual and source_email_id in application.source_email_ids:
         raise TransitionConflict("email was already attached with a different outcome")
     if changed_at < application.updated_at:
+        if manual:
+            raise TransitionConflict("correction approval predates current application state")
         return application  # older evidence never reverses a newer observation
     if not manual and application.manual_override is not None:
         return application  # a manual correction holds until another user action
@@ -123,9 +153,9 @@ def advance_application(
     emails = application.source_email_ids
     if source_email_id and source_email_id not in emails:
         emails += (source_email_id,)
-    if status == application.status and not manual:
-        return replace(application, source_email_ids=emails, updated_at=changed_at)
-    change = ApplicationStatusChange(change_id, status, changed_at, source_email_id, reason, manual)
+    change = ApplicationStatusChange(change_id, status, changed_at, source_email_id, reason, manual,
+                                     source_evidence, correction.id if correction else None,
+                                     decision_outcome)
     override = (
         ManualOverride(correction.actor_reference, correction.correction, changed_at)
         if correction else application.manual_override

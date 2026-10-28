@@ -88,7 +88,7 @@ class StateTest(unittest.TestCase):
         self.assertIsNone(store.get(self.record.id))
         store.save(self.record, self.result)
         with closing(sqlite3.connect(self.path)) as conn, conn:
-            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 7)
             self.assertEqual(conn.execute("SELECT count(*) FROM email_records").fetchone()[0], 1)
 
     def test_gmail_save_requires_account_and_unbound_legacy_decision_is_rejected(self):

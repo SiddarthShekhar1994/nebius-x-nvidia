@@ -92,12 +92,14 @@ class FakeCalendar:
         end = min(start + limit, len(matches))
         return CalendarEventPage(tuple(matches[start:end]), str(end) if end < len(matches) else None)
 
-    def create_deadline(self, event_id: str, deadline_at: datetime, summary: str, *, idempotency_key: str) -> str:
-        return self.upsert_deadline(event_id, deadline_at, summary, idempotency_key=idempotency_key)
+    def create_deadline(self, event_id: str, deadline_at: datetime, summary: str, *,
+                        idempotency_key: str, review_policy=None) -> str:
+        return self.upsert_deadline(event_id, deadline_at, summary, idempotency_key=idempotency_key,
+                                    review_policy=review_policy)
 
     def upsert_deadline(
         self, event_id: str, deadline_at: datetime, summary: str, *,
-        idempotency_key: str, provider_event_id: str | None = None,
+        idempotency_key: str, provider_event_id: str | None = None, review_policy=None,
     ) -> str:
         if deadline_at.tzinfo is not timezone.utc:
             raise ValueError("deadline_at must be UTC")

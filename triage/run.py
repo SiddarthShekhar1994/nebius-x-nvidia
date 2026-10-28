@@ -1,10 +1,12 @@
 """Save a stable decision before additive labels; reuse it on every retry."""
 import sqlite3
 from collections import Counter
+from contextlib import closing
 from dataclasses import replace
 from datetime import datetime, timezone
 
 from keeper_core.adapters import AdapterError, AuthenticationError, IdempotencyConflict, ProviderUnavailable
+from keeper_core.application_activity import activity_for_email
 from keeper_core.workflow import stable_key
 from .classifier import MODEL_UNAVAILABLE_REASON, _review, classify_email
 from .model import ModelConfigurationError
@@ -38,6 +40,10 @@ def run_triage(source, model, store, *, save=False, apply=False, limit=1000,
             "total": len(identities), "failed": len(errors), "unprocessed": len(identities) - len(rows) - len(errors),
             "applied": sum(row["status"] == "applied" for row in rows),
             "reused": sum(row["reused"] for row in rows),
+            "calendar_lines": sum(line["kind"].startswith("calendar_")
+                                  for row in rows for line in row["activity_lines"]),
+            "draft_lines": sum(line["kind"] == "gmail_draft"
+                               for row in rows for line in row["activity_lines"]),
         },
         "results": rows, "errors": errors,
     }
@@ -68,4 +74,15 @@ def _process(source, identity, model, store, now, save, apply, require_live):
         source.apply_labels(record.id, tuple(row["proposed_labels"]),
                             idempotency_key=stable_key("triage-labels", source.account, result.id))
         row = {**row, "status": "applied"}
+    row["activity_lines"] = _activity_lines(store, record.id)
     return row
+
+
+def _activity_lines(store, email_id):
+    if not store.path.is_file():
+        return []
+    with closing(sqlite3.connect(store.path.resolve().as_uri() + "?mode=ro", uri=True)) as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='application_activity'"
+        ).fetchone()
+        return activity_for_email(conn, email_id) if exists else []

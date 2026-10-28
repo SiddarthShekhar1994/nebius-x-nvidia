@@ -238,18 +238,18 @@ These are initial assignments, **not assertions about unverified individual spec
 **Depends on:** Phases 1 and 3; existing router  
 **Output:** `keeper triage run` core classifier
 
-1. Implement a constrained Nano classification prompt returning validated structured fields and a one-sentence reason.
-2. Add robust parsing, schema checks, explicit `unknown`/review fallback, and retry behavior for malformed model outputs.
-3. Implement deterministic career keyword/sender checks **after** model classification; override any career-related junk decision to a reviewable bucket.
-4. Implement scam signal checks and distinguish `flagged` from `proven scam`; retain explanations and source evidence.
-5. Parse candidate dates and deadlines with timezone awareness; represent ambiguous dates as needing confirmation.
-6. Map triage results to safe Gmail labels and a persistent result table; avoid destructive archive/delete behavior.
-7. Preserve model request metadata and router logs; do not treat confidence scores as calibrated probabilities.
-8. Add fixture-based unit tests for all buckets, career override, scam signals, missing dates, and prompt-injection-like content.
-9. Add a dry-run command showing proposed changes without Gmail mutations, followed by explicit apply mode.
-10. Run the seeded inbox and compare actual versus expected labels; record all misses for the eval owner.
+1. Implement a constrained Nano classification prompt returning validated structured fields and a one-sentence reason.-
+2. Add robust parsing, schema checks, explicit `unknown`/review fallback, and retry behavior for malformed model outputs.-
+3. Implement deterministic career keyword/sender checks **after** model classification; override any career-related junk decision to a reviewable bucket.-
+4. Implement scam signal checks and distinguish `flagged` from `proven scam`; retain explanations and source evidence.-
+5. Parse candidate dates and deadlines with timezone awareness; represent ambiguous dates as needing confirmation.-
+6. Map triage results to safe Gmail labels and a persistent result table; avoid destructive archive/delete behavior.-
+7. Preserve model request metadata and router logs; do not treat confidence scores as calibrated probabilities.-
+8. Add fixture-based unit tests for all buckets, career override, scam signals, missing dates, and prompt-injection-like content.-
+9. Add a dry-run command showing proposed changes without Gmail mutations, followed by explicit apply mode.-
+10. Run the seeded inbox and compare actual versus expected labels; record all misses for the eval owner.-
 
-**Definition of done:** Full inbox processes reliably; career mail is never sent to junk by Keeper; reasons and scam flags are visible; replay is idempotent.
+**Definition of done:** Full inbox processes reliably; career mail is never sent to junk by Keeper; reasons and scam flags are visible; replay is idempotent.-
 
 ## PHASE 5 — APPLICATION TRACKER AND EMAIL-DRIVEN STATE MACHINE
 
@@ -257,16 +257,16 @@ These are initial assignments, **not assertions about unverified individual spec
 **Depends on:** Phases 1, 3, 4  
 **Output:** Persistent application lifecycle tracking
 
-1. Create application repository operations and a transition history table with source evidence for every update.
-2. Resolve company/title identity from messages using normalized organization and opportunity keys; require review for ambiguous matches.
-3. Detect confirmation emails and move matching opportunities from `found` to `applied`.
-4. Detect interview invitations and move matching applications to `interview` without creating duplicate application records.
-5. Detect rejection/offer/decision signals and move matching applications to `decision`, preserving the specific outcome as metadata.
-6. Prevent backwards or contradictory transitions unless explicitly approved; retain full audit history.
-7. Expose CLI commands to list applications, inspect history, and apply a manual correction.
-8. Build a read-only `/apps` Telegram response backed by the same database, if gateway support permits.
-9. Test repeated email ingestion, out-of-order messages, multiple roles at one company, and ambiguous subject lines.
-10. Provide a deterministic scenario showing a single application moving through multiple states.
+1. Create application repository operations and a transition history table with source evidence for every update.-
+2. Resolve company/title identity from messages using normalized organization and opportunity keys; require review for ambiguous matches.-
+3. Detect confirmation emails and move matching opportunities from `found` to `applied`.-
+4. Detect interview invitations and move matching applications to `interview` without creating duplicate application records.-
+5. Detect rejection/offer/decision signals and move matching applications to `decision`, preserving the specific outcome as metadata.-
+6. Prevent backwards or contradictory transitions unless explicitly approved; retain full audit history.-
+7. Expose CLI commands to list applications, inspect history, and apply a manual correction.-
+8. Build a read-only `/apps` Telegram response backed by the same database, if gateway support permits.-
+9. Test repeated email ingestion, out-of-order messages, multiple roles at one company, and ambiguous subject lines.-
+10. Provide a deterministic scenario showing a single application moving through multiple states.-
 
 **Definition of done:** A confirmation, interview invite, and rejection update one persistent application with an auditable history; reprocessing creates no duplicates.
 
@@ -276,16 +276,16 @@ These are initial assignments, **not assertions about unverified individual spec
 **Depends on:** Phases 2, 4, 5  
 **Output:** Actionable inbox becomes calendar events and unsent drafts
 
-1. Extract deadline candidates from relevant email with provenance and uncertainty flags.
-2. Validate dates and timezone assumptions; do not schedule ambiguous or past dates without an explicit review policy.
-3. Create a Calendar event for each confirmed deadline using an application/opportunity idempotency key.
-4. Store the provider event ID and update that event when an email explicitly extends a deadline.
-5. Test duplicate deadline emails, shortened deadlines, moved deadlines, and API retry scenarios.
-6. Draft context-aware replies with Super, including appropriate subject/thread context and concise professional tone.
-7. Create Gmail drafts through the draft API only; prohibit send operations in adapter interfaces and tests.
-8. Flag uncertain recruiter identity, missing context, and sensitive details for manual review rather than hallucinating them.
-9. Integrate event and draft links into the triage summary and application history.
-10. Demonstrate that a deadline extension moves the original event and that no draft has been sent.
+1. Extract deadline candidates from relevant email with provenance and uncertainty flags.-
+2. Validate dates and timezone assumptions; do not schedule ambiguous or past dates without an explicit review policy.-
+3. Create a Calendar event for each confirmed deadline using an application/opportunity idempotency key.-
+4. Store the provider event ID and update that event when an email explicitly extends a deadline.-
+5. Test duplicate deadline emails, shortened deadlines, moved deadlines, and API retry scenarios.-
+6. Draft context-aware replies with Super, including appropriate subject/thread context and concise professional tone.-
+7. Create Gmail drafts through the draft API only; prohibit send operations in adapter interfaces and tests.-
+8. Flag uncertain recruiter identity, missing context, and sensitive details for manual review rather than hallucinating them.-
+9. Integrate event and draft links into the triage summary and application history.-
+10. Demonstrate that a deadline extension moves the original event and that no draft has been sent.-
 
 **Definition of done:** One email yields a safe unsent draft and a correct calendar event; an extension updates rather than duplicates the event.
 
@@ -295,13 +295,13 @@ These are initial assignments, **not assertions about unverified individual spec
 **Depends on:** Phases 1–2; existing memory  
 **Output:** `keeper radar run` with relevant opportunities
 
-1. Define `profile.md` fields for target roles, graduation year, major, location constraints, work authorization where voluntarily supplied, and opportunity preferences.
-2. Build bounded Tavily queries from profile fields; prefer primary application URLs and credible sources.
-3. Normalize search results into opportunities with canonical URLs, title, organization, source, and discovery timestamp.
-4. Add heuristic filtering for obvious mismatches, closed/duplicate results, and unsupported eligibility claims.
-5. Use Nano to score relevance on a documented 1–10 rubric and generate one-line evidence-based explanations.
-6. Check eligibility against explicitly known profile attributes; label unknown conditions `unverified` rather than ineligible.
-7. Deduplicate by canonical URL plus organization/title; preserve prior opportunity history across daily runs.
+1. Define `profile.md` fields for target roles, graduation year, major, location constraints, work authorization where voluntarily supplied, and opportunity preferences.-
+2. Build bounded Tavily queries from profile fields; prefer primary application URLs and credible sources.-
+3. Normalize search results into opportunities with canonical URLs, title, organization, source, and discovery timestamp.-
+4. Add heuristic filtering for obvious mismatches, closed/duplicate results, and unsupported eligibility claims.-
+5. Use Nano to score relevance on a documented 1–10 rubric and generate one-line evidence-based explanations.-
+6. Check eligibility against explicitly known profile attributes; label unknown conditions `unverified` rather than ineligible.-
+7. Deduplicate by canonical URL plus organization/title; preserve prior opportunity history across daily runs.-
 8. Persist top candidates and send a concise top-five Telegram digest with links, scores, and reasons.
 9. Connect confidently verified deadlines to the calendar path; avoid treating search snippets as definitive closing dates.
 10. Test empty results, API outage, duplicate URLs, irrelevant jobs, unknown authorization, and repeat runs.

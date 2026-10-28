@@ -67,8 +67,9 @@ def check_gateway_access(
         path = hermes_home / "config.yaml"
         _read(path)
         content = path.read_text(encoding="utf-8")
-        if "skills teach" not in content or "skills keep" not in content:
-            raise ValueError("/teach or /keep quick command is not configured")
+        if ("skills teach" not in content or "skills keep" not in content
+                or "keeper apps telegram" not in content):
+            raise ValueError("required Keeper quick command is not configured")
 
     check("gateway config and quick commands", config_read)
     check("gateway environment", lambda: _read(hermes_home / ".env", secret=True))
@@ -80,6 +81,14 @@ def check_gateway_access(
             conn.execute("SELECT 1").fetchone()
 
     check("session log read for /teach", state_read)
+
+    def apps_read() -> None:
+        path = data_dir / "keeper.db"
+        _read(path, secret=True)
+        with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as conn:
+            conn.execute("SELECT 1 FROM applications LIMIT 1").fetchone()
+
+    check("Keeper database read for /apps", apps_read)
     check("Keeper data write for /teach", lambda: _write_dir(data_dir))
     drafts = data_dir / "skill-drafts"
     if drafts.exists():

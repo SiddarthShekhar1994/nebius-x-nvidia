@@ -124,6 +124,9 @@ class ApplicationStatusChange:
     source_email_id: str | None
     reason: str
     manual: bool = False
+    source_evidence: str | None = None
+    correction_id: str | None = None
+    decision_outcome: str | None = None
 
     def __post_init__(self) -> None:
         _check_utc(self)

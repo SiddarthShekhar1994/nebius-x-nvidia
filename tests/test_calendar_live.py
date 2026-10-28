@@ -10,6 +10,7 @@ from pathlib import Path
 from integrations.calendar import LiveCalendar
 from keeper_core.adapters import IdempotencyConflict, RateLimited
 from keeper_core.db import migrate
+from keeper_core.deadlines import DeadlineReviewPolicy, DeadlineReviewRequired
 from keeper_core.time import to_storage
 
 
@@ -137,6 +138,18 @@ class CalendarTest(unittest.TestCase):
         self.assertEqual([name for name, _ in self.service.calls], ["list"])
         self.assertEqual(self.service.calls[0][1]["maxResults"], 1)
 
+    def test_past_deadline_is_blocked_before_provider_without_review_policy(self):
+        past = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
+        with self.assertRaises(DeadlineReviewRequired):
+            self.calendar.create_deadline("deadline:1", past, "Apply", idempotency_key="key:past")
+        self.assertEqual(self.service.calls, [])
+        self.assertIsNone(self.mapping()[1])
+        policy = DeadlineReviewPolicy("candidate:reviewed", "user:1", "Approved historical event",
+                                      self.initial, past, allow_past=True)
+        self.calendar.create_deadline("deadline:1", past, "Apply", idempotency_key="key:past",
+                                      review_policy=policy)
+        self.assertEqual(len(self.service.items), 1)
+
     def test_create_persists_id_then_updates_same_event(self):
         event_id = self.calendar.create_deadline("deadline:1", self.initial, "Apply", idempotency_key="key:1")
         self.assertEqual(self.mapping()[:2], ("google-calendar", event_id))
@@ -202,6 +215,20 @@ class CalendarTest(unittest.TestCase):
         self.assertEqual(restarted.create_deadline("deadline:1", self.initial, "Apply",
                                                   idempotency_key="key:1"), provider_id)
         self.assertEqual(self.mapping()[1], provider_id)
+        self.assertEqual(len(self.service.items), 1)
+
+    def test_collision_recovery_applies_requested_deadline(self):
+        provider_id = self.calendar.create_deadline(
+            "deadline:1", self.initial, "Apply", idempotency_key="key:1")
+        with closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.execute("UPDATE deadline_events SET provider = NULL, provider_event_id = NULL WHERE id = 'deadline:1'")
+        self.service.hide_key_search = True
+        later = datetime(2026, 11, 3, 12, tzinfo=timezone.utc)
+        recovered = LiveCalendar(self.service, self.db, now=lambda: self.initial)
+        self.assertEqual(recovered.upsert_deadline(
+            "deadline:1", later, "Apply later", idempotency_key="key:1"), provider_id)
+        self.assertEqual(self.service.items[provider_id]["start"]["dateTime"], "2026-11-03T12:00:00Z")
+        self.assertEqual(self.mapping()[2], to_storage(later))
         self.assertEqual(len(self.service.items), 1)
 
     def test_patch_rate_limit_retries_without_creating(self):

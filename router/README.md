@@ -11,7 +11,7 @@ print(resp.choices[0].message.content)
 
 | Task type | Model | Model id |
 | --- | --- | --- |
-| `classify`, `triage` | Nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` |
+| `classify`, `triage`, `radar` | Nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` |
 | `tool_call`, `draft` | Super | `nvidia/nemotron-3-super-120b-a12b` |
 | `plan`, `skill_write` | Ultra | `nvidia/Nemotron-3-Ultra-550b-a55b` |
 

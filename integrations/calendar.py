@@ -15,6 +15,7 @@ from keeper_core.adapters import (
     IdempotencyConflict, InvalidProviderResponse, ProviderNotFound,
     ProviderUnavailable, RateLimited,
 )
+from keeper_core.deadlines import DeadlineReviewPolicy, validate_calendar_instant
 from keeper_core.time import to_storage
 
 _SCOPE = "https://www.googleapis.com/auth/calendar.events"
@@ -216,18 +217,21 @@ class LiveCalendar:
 
     def create_deadline(
         self, event_id: str, deadline_at: datetime, summary: str, *, idempotency_key: str,
+        review_policy: DeadlineReviewPolicy | None = None,
     ) -> str:
-        return self.upsert_deadline(event_id, deadline_at, summary, idempotency_key=idempotency_key)
+        return self.upsert_deadline(event_id, deadline_at, summary,
+                                    idempotency_key=idempotency_key, review_policy=review_policy)
 
     def upsert_deadline(
         self, event_id: str, deadline_at: datetime, summary: str, *,
         idempotency_key: str, provider_event_id: str | None = None,
+        review_policy: DeadlineReviewPolicy | None = None,
     ) -> str:
         if not event_id or not idempotency_key or not summary.strip():
             raise ValueError("event ID, idempotency key, and summary are required")
         if deadline_at.tzinfo is None or deadline_at.utcoffset() is None:
             raise ValueError("deadline must have a timezone")
-        deadline_at = deadline_at.astimezone(timezone.utc)
+        deadline_at = validate_calendar_instant(deadline_at, now=self._now(), policy=review_policy)
         prior = self._keys.get(idempotency_key)
         if prior is not None and prior != event_id:
             raise IdempotencyConflict("calendar key reused for another deadline")
@@ -263,6 +267,10 @@ class LiveCalendar:
                     calendarId=self._calendar_id, eventId=provider_id))
                 if recovered.get("extendedProperties", {}).get("private", {}).get("keeperDeadlineKey") != key:
                     raise IdempotencyConflict("provider event ID collision")
+                if recovered.get("summary") != summary or _start(recovered) != deadline_at:
+                    self._execute(lambda: self._service.events().patch(
+                        calendarId=self._calendar_id, eventId=provider_id,
+                        body=body, sendUpdates="none"))
             if not isinstance(provider_id, str) or not provider_id:
                 raise InvalidProviderResponse("Calendar creation returned no event ID")
             if provider_id != body["id"]:

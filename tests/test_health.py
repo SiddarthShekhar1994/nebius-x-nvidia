@@ -25,13 +25,14 @@ class HealthTest(unittest.TestCase):
         self.data.mkdir(mode=0o700)
         self.db = self.data / "keeper.db"
         migrate(self.db)
+        self.db.chmod(0o600)
         self.runtime = self.hermes / "runtime"
         self.runtime.mkdir(mode=0o700)
         self.state = self.runtime / "state.db"
         sqlite3.connect(self.state).close()
         self.state.chmod(0o600)
         self.config = self.hermes / "config.yaml"
-        self.config.write_text("teach: keeper skills teach\nkeep: keeper skills keep\n")
+        self.config.write_text("teach: keeper skills teach\nkeep: keeper skills keep\napps: keeper apps telegram\n")
         self.config.chmod(0o600)
         self.env = self.hermes / ".env"
         self.env.write_text("TEST_PLACEHOLDER=yes\n")

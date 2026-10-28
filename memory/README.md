@@ -2,6 +2,8 @@
 
 Keeper's long-term memory: one markdown file per topic, under `KEEPER_DATA_DIR/memory/`. In the sandbox that's `/sandbox/keeper/data/memory/`, on the sandbox's persistent volume.
 
+The user-maintained `profile.md` in that directory is the opportunity radar's structured input. Its fields and missing-value rules are in [the profile contract](../docs/profile.md); [the demo profile](../demo/profile.md) is synthetic. Edit a real profile directly on the private data volume, not with `keeper memory add`, which appends dated topic notes.
+
 ```
 # Deadlines
 

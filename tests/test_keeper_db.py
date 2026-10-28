@@ -18,7 +18,7 @@ class KeeperDatabaseTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.db = Path(self.tmp.name) / "nested" / "keeper.db"
-        self.assertEqual(migrate(self.db), 3)
+        self.assertEqual(migrate(self.db), 7)
         self.conn = sqlite3.connect(self.db)
         self.conn.execute("PRAGMA foreign_keys = ON")
 
@@ -47,9 +47,55 @@ class KeeperDatabaseTest(unittest.TestCase):
     def test_bootstrap_is_idempotent_and_keeps_data(self):
         self.email()
         self.conn.commit()
-        self.assertEqual(migrate(self.db), 3)
+        self.assertEqual(migrate(self.db), 7)
         self.assertEqual(self.conn.execute("SELECT count(*) FROM email_records").fetchone()[0], 1)
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 3)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 7)
+
+    def test_version_three_history_gets_evidence_and_outcome_on_upgrade(self):
+        legacy = Path(self.tmp.name) / "v3.db"
+        migrations = Path(self.tmp.name) / "v3_migrations"
+        migrations.mkdir()
+        for number in (1, 2, 3):
+            source = next(MIGRATIONS.glob(f"{number:03d}_*.sql"))
+            (migrations / source.name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        self.assertEqual(migrate(legacy, migrations_dir=migrations), 3)
+        with closing(sqlite3.connect(legacy)) as conn, conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute(
+                """INSERT INTO opportunities
+                   (id, dedupe_key, canonical_url, organization, title, source,
+                    discovered_at, eligibility)
+                   VALUES ('opp', 'key', 'https://example.test/opp', 'Example', 'Intern',
+                           'fixture', ?, 'unverified')""", (STAMP,),
+            )
+            conn.execute(
+                """INSERT INTO applications
+                   (id, opportunity_id, status, created_at, updated_at, decision_outcome)
+                   VALUES ('app', 'opp', 'decision', ?, ?, 'rejected')""", (STAMP, STAMP),
+            )
+            conn.execute(
+                """INSERT INTO application_status_changes
+                   (id, application_id, status, changed_at, reason)
+                   VALUES ('change', 'app', 'decision', ?, 'Rejection email')""", (STAMP,),
+            )
+        self.assertEqual(migrate(legacy), 7)
+        with closing(sqlite3.connect(legacy)) as conn:
+            self.assertEqual(conn.execute(
+                "SELECT source_evidence, decision_outcome FROM application_status_changes"
+            ).fetchone(), ("Rejection email", "rejected"))
+
+    def test_new_history_requires_source_evidence(self):
+        self.opportunity()
+        self.conn.execute(
+            """INSERT INTO applications (id, opportunity_id, status, created_at, updated_at)
+               VALUES ('app:1', 'opp:1', 'found', ?, ?)""", (STAMP, STAMP),
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                """INSERT INTO application_status_changes
+                   (id, application_id, status, changed_at, reason)
+                   VALUES ('change:1', 'app:1', 'found', ?, 'Discovered')""", (STAMP,),
+            )
 
     def test_unique_email_provider_mapping_and_id(self):
         self.email()
@@ -132,12 +178,24 @@ class KeeperDatabaseTest(unittest.TestCase):
         (directory / "003_triage_account.sql").write_text(
             (MIGRATIONS / "003_triage_account.sql").read_text(), encoding="utf-8"
         )
-        (directory / "004_broken.sql").write_text(
+        (directory / "004_application_evidence.sql").write_text(
+            (MIGRATIONS / "004_application_evidence.sql").read_text(), encoding="utf-8"
+        )
+        (directory / "005_application_activity.sql").write_text(
+            (MIGRATIONS / "005_application_activity.sql").read_text(), encoding="utf-8"
+        )
+        (directory / "006_radar_observations.sql").write_text(
+            (MIGRATIONS / "006_radar_observations.sql").read_text(), encoding="utf-8"
+        )
+        (directory / "007_radar_digest_snapshots.sql").write_text(
+            (MIGRATIONS / "007_radar_digest_snapshots.sql").read_text(), encoding="utf-8"
+        )
+        (directory / "008_broken.sql").write_text(
             "CREATE TABLE should_rollback (id TEXT);\nINVALID SQL;\n", encoding="utf-8"
         )
         with self.assertRaises(sqlite3.Error):
             migrate(self.db, migrations_dir=directory)
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 3)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 7)
         self.assertIsNone(self.conn.execute(
             "SELECT name FROM sqlite_master WHERE name = 'should_rollback'"
         ).fetchone())
@@ -149,9 +207,9 @@ class KeeperDatabaseTest(unittest.TestCase):
             [sys.executable, str(script), "--db", str(path)],
             cwd=self.tmp.name, text=True, capture_output=True, check=True,
         )
-        self.assertIn("schema version 3", result.stdout)
+        self.assertIn("schema version 7", result.stdout)
         with closing(sqlite3.connect(path)) as conn, conn:
-            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 7)
 
 
 class TimestampTest(unittest.TestCase):

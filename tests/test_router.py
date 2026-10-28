@@ -53,6 +53,7 @@ class RouterTest(unittest.TestCase):
         expected = {
             "classify": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
             "triage": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+            "radar": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
             "tool_call": "nvidia/nemotron-3-super-120b-a12b",
             "draft": "nvidia/nemotron-3-super-120b-a12b",
             "plan": "nvidia/Nemotron-3-Ultra-550b-a55b",

@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Protocol
 
 from .contracts import EmailRecord, ModelMetadata
+from .deadlines import DeadlineReviewPolicy
 
 
 class AdapterError(Exception):
@@ -92,10 +93,12 @@ class CalendarAdapter(Protocol):
     def search_events(self, query: str, *, cursor: str | None = None, limit: int = 50) -> CalendarEventPage: ...
     def create_deadline(
         self, event_id: str, deadline_at: datetime, summary: str, *, idempotency_key: str,
+        review_policy: DeadlineReviewPolicy | None = None,
     ) -> str: ...
     def upsert_deadline(
         self, event_id: str, deadline_at: datetime, summary: str, *,
         idempotency_key: str, provider_event_id: str | None = None,
+        review_policy: DeadlineReviewPolicy | None = None,
     ) -> str: ...
 
 

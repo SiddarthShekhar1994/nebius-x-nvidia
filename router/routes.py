@@ -3,6 +3,7 @@
 TASK_TIERS = {
     "classify": "nano",
     "triage": "nano",
+    "radar": "nano",
     "tool_call": "super",
     "draft": "super",
     "plan": "ultra",
