@@ -146,5 +146,5 @@ Contracts first, so the two builders can work in parallel without waiting on eac
 - Only the throwaway Gmail account, never a real inbox, in data or on video.
 - Keeper never sends email. It only drafts.
 - No keys, tokens or OAuth files in the repo or the chat.
-- Teammate works on their own branch and opens pull requests into `claude/dreamy-tesla-7tv0ko`.
+- Teammate works on their own branch and opens pull requests into `main`.
 - Every item ends with a review stop.

@@ -82,7 +82,7 @@ Claude drafts the shared interface and an empty version of each module first thi
 
 **Cut order for these three days:** replay, then radar, then the model comparison, then Telegram summary polish. Never cut: triage on real Gmail, drafts, calendar deadline, tracker update, the lockdown with the attack email, the eval numbers, and the video.
 
-All work goes on short-lived branches with pull requests into `claude/dreamy-tesla-7tv0ko`, with offline tests that use the fakes.
+All work goes on short-lived branches with pull requests into `main`, with offline tests that use the fakes.
 
 ---
 
