@@ -29,7 +29,8 @@ class RadarRouterModel:
         try:
             response = route(
                 "radar", [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
-                settings=self.settings, client=self.client, max_tokens=512, temperature=0,
+                # Nano reasons before it scores; 512 tokens cut answers off.
+                settings=self.settings, client=self.client, max_tokens=4096, temperature=0,
             )
         except openai.APIConnectionError:
             raise ProviderUnavailable("Nebius connection unavailable") from None
