@@ -5,6 +5,7 @@ import collections
 import html
 import json
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,7 +18,7 @@ def rows(db: Path | None, table: str) -> list[dict]:
         return []
     uri = db.resolve().as_uri() + '?mode=ro'
     try:
-        with sqlite3.connect(uri, uri=True) as conn:
+        with closing(sqlite3.connect(uri, uri=True)) as conn:
             conn.row_factory = sqlite3.Row
             if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
                 return []
