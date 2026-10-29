@@ -4,15 +4,15 @@ from __future__ import annotations
 import re
 import sqlite3
 from contextlib import closing
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 
 from .adapters import CalendarAdapter, IdempotencyConflict
 from .application_activity import record_activity
 from .deadlines import (
     DeadlineCandidate, DeadlineReviewPolicy, DeadlineReviewRequired,
-    validated_deadline_at,
+    source_deadline_candidates, validated_deadline_at,
 )
 from .time import from_storage, to_storage
 from .workflow import stable_key
@@ -78,14 +78,23 @@ def sync_deadline_candidate(
             if application != (opportunity_id,):
                 raise ValueError("application does not belong to opportunity")
         source = conn.execute(
-            "SELECT subject, body_excerpt, received_at FROM email_records WHERE id = ?",
+            "SELECT subject, body_excerpt, received_at, raw_link_reference FROM email_records WHERE id = ?",
             (candidate.source_email_id,),
         ).fetchone()
         if source is None:
             raise ValueError("source email is not stored")
-        source_text = source[0] if candidate.source_field == "subject" else source[1] if candidate.source_field == "body_excerpt" else None
-        if source_text is None or candidate.evidence not in source_text or candidate.raw_date not in candidate.evidence:
-            raise ValueError("deadline evidence does not match stored email")
+        source_candidates = source_deadline_candidates(
+            candidate.source_email_id, source[0], source[1],
+            source[3] or candidate.source_email_id, now=now,
+        )
+        stored_candidate = next((item for item in source_candidates if item.id == candidate.id), None)
+        # Triage flags belong to the caller; compare the source-derived fields here.
+        if stored_candidate is None or replace(candidate, flags=stored_candidate.flags) != stored_candidate:
+            raise DeadlineReviewRequired("deadline candidate does not match stored email")
+        if policy is None:
+            if len(source_candidates) != 1:
+                raise DeadlineReviewRequired("multiple source deadlines need review")
+            validated_deadline_at(stored_candidate, now=now)
         existing = conn.execute(
             """SELECT application_id, source_email_id, deadline_at, evidence,
                       provider, provider_event_id

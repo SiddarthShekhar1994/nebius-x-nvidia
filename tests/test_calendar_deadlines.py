@@ -1,5 +1,6 @@
 import sqlite3
 from contextlib import closing
+from dataclasses import replace
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -9,7 +10,7 @@ from integrations.calendar import LiveCalendar
 from keeper_core.calendar_deadlines import sync_deadline_candidate
 from keeper_core.contracts import EmailRecord, IngestionMetadata, TriageBucket, TriageResult
 from keeper_core.db import migrate
-from keeper_core.deadlines import DeadlineReviewPolicy, extract_deadline_candidates
+from keeper_core.deadlines import DeadlineReviewPolicy, DeadlineReviewRequired, extract_deadline_candidates
 from keeper_core.ingest import insert_email_once
 from keeper_core.time import to_storage
 from tests.test_calendar_live import Service, error
@@ -149,6 +150,46 @@ class CalendarDeadlineSyncTest(unittest.TestCase):
             ).fetchall()
         self.assertEqual(activities, [("calendar_created", "gmail:1", created.provider_event_id)])
         self.assertEqual(len(self.service.items), 1)
+
+    def test_replaced_candidate_deadline_requires_review_before_writes(self):
+        candidate = self.candidate(1, "Apply by 2026-11-02T09:30:00Z.")
+        changed = replace(candidate, deadline_at=datetime(2026, 11, 20, 9, 30, tzinfo=timezone.utc))
+
+        with self.assertRaises(DeadlineReviewRequired):
+            self.sync(changed)
+        self.assertEqual(self.service.calls, [])
+        self.assertIsNone(self.row())
+        with closing(sqlite3.connect(self.path)) as conn, conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM application_activity").fetchone()[0], 0)
+
+        self.sync(candidate)
+        original = self.row()
+        call_count = len(self.service.calls)
+        with closing(sqlite3.connect(self.path)) as conn, conn:
+            activity_count = conn.execute("SELECT COUNT(*) FROM application_activity").fetchone()[0]
+        with self.assertRaises(DeadlineReviewRequired):
+            self.sync(changed)
+        self.assertEqual(self.row(), original)
+        self.assertEqual(len(self.service.calls), call_count)
+        with closing(sqlite3.connect(self.path)) as conn, conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM application_activity").fetchone()[0], activity_count)
+
+    def test_source_review_requirements_cannot_be_removed(self):
+        for number, body in enumerate((
+            "2026-11-02T09:30:00Z is the date shown in the portal.",
+            "Apply by 2026-11-02T09:30:00Z. Alternatively, apply by 2026-11-03T09:30:00Z.",
+        ), 1):
+            with self.subTest(body=body):
+                candidate = self.candidate(number, body)
+                self.assertTrue(candidate.flags)
+                with self.assertRaises(DeadlineReviewRequired):
+                    self.sync(replace(candidate, flags=()))
+                self.assertEqual(self.service.calls, [])
+                self.assertIsNone(self.row())
+
+        policy = DeadlineReviewPolicy(candidate.id, "user:1", "Confirmed first deadline",
+                                      NOW, candidate.deadline_at)
+        self.assertEqual(self.sync(candidate, policy=policy).status, "created")
 
 
 if __name__ == "__main__":
