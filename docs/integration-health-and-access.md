@@ -25,9 +25,9 @@ The gateway probe must run as the same effective user as Hermes. `/teach` reads 
 
 | Service | Credential or scope | Runtime host and operation |
 | --- | --- | --- |
-| Gmail | Google OAuth `gmail.modify` | `gmail.googleapis.com`: profile and message reads, label edits, draft creation. The scope also permits send even though Keeper exposes no send action. [Google scope reference](https://developers.google.com/workspace/gmail/api/auth/scopes). |
-| Calendar | Google OAuth `calendar.events` | `www.googleapis.com`: event list, get, insert, patch. [Calendar scope reference](https://developers.google.com/workspace/calendar/api/auth). |
-| Google OAuth refresh | Desktop OAuth refresh token | `oauth2.googleapis.com`: token refresh; Google client discovery may also contact `www.googleapis.com`. [Google OAuth documentation](https://developers.google.com/identity/protocols/oauth2/web-server). |
+| Gmail | Google OAuth `gmail.modify` | `gmail.googleapis.com`: profile and message reads, label edits, draft creation. The scope also permits send; the `keeper-google` policy denies the send endpoints. [Google scope reference](https://developers.google.com/workspace/gmail/api/auth/scopes). |
+| Calendar | Google OAuth `calendar.events` | `www.googleapis.com`: event list, get, insert, patch on the primary calendar. [Calendar scope reference](https://developers.google.com/workspace/calendar/api/auth). |
+| Google OAuth refresh | Desktop OAuth refresh token | `oauth2.googleapis.com`: `POST /token` only. [Google OAuth documentation](https://developers.google.com/identity/protocols/oauth2/web-server). |
 | Telegram | BotFather bot token; NemoClaw channel user allowlist | `api.telegram.org`: gateway traffic and Keeper `getMe`/`sendMessage`. [Bot API](https://core.telegram.org/bots/api), [NemoClaw channel setup](https://docs.nvidia.com/nemoclaw/user-guide/hermes/manage-sandboxes/messaging-channels/set-up-telegram). |
 | Tavily | Tavily API key | `api.tavily.com`: `POST /search`. [Tavily search reference](https://docs.tavily.com/documentation/api-reference/endpoint/search). |
 | Token Factory | Nebius API key or OpenShell provider credential | `api.tokenfactory.us-central1.nebius.com`: `GET /v1/models`, `POST /v1/chat/completions` in this repo's policy. |
@@ -45,7 +45,7 @@ Review OpenShell's live policy before enabling traffic. NemoClaw's `telegram` an
 
 - No `nemohermes` binary, bot token, or API keys are available in this checkout. Offline tests and local permission simulations do not establish that the live gateway is configured or reachable.
 - NemoClaw rebuilds generate channel configuration. In-sandbox manual edits may disappear on rebuild; reinstall Keeper code or credentials if a rebuild replaced them.
-- Google desktop OAuth testing grants may expire, refresh may fail, and `gmail.modify` carries broader authority than Keeper's draft-only code path. Health checks do not prove that the network policy blocks Gmail send endpoints.
+- Google desktop OAuth testing grants may expire, refresh may fail, and `gmail.modify` carries broader authority than Keeper's draft-only code path. The `keeper-google` policy denies Gmail's send endpoints; health checks don't exercise that, so a denied send shows up only in OpenShell's logs (`nemohermes keeper logs --tail 50`).
 - A Telegram timeout or 5xx after `sendMessage` has an unknown delivery outcome. Keeper leaves that notification pending for reconciliation rather than retrying blindly.
 - Tavily search consumes credits and can time out. A valid key with a denied egress path fails the live probe; a successful local check proves only the file and schema are present.
 - A permission probe run under a different UID, especially root, cannot prove the Hermes gateway user can make the same writes. Resolve ownership only for the documented paths and rerun as the real gateway UID.

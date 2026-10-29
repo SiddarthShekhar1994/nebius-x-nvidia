@@ -1,0 +1,54 @@
+# NemoClaw policy preset: opens the Gmail and Calendar calls Keeper makes to
+# Keeper's Python only, and blocks sending mail outright. gmail.modify would let
+# a token send; this policy is what makes Keeper draft-only.
+# Apply with: nemohermes keeper policy add --from-file agent/openshell/policies/keeper-google.yaml --yes
+# The allowed routes match integrations/google_rest.py; tests/test_google_rest.py
+# checks the two stay in sync. Calendar is limited to the primary calendar and
+# Gmail to the signed-in user ("me"), which is all Keeper uses.
+preset:
+  name: keeper-google
+  description: "Gmail labels and drafts plus Calendar deadlines for Keeper; sending mail is denied"
+
+network_policies:
+  keeper_google:
+    name: keeper_google
+    endpoints:
+      - host: oauth2.googleapis.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: POST, path: "/token" }
+      - host: gmail.googleapis.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/gmail/v1/users/me/profile" }
+          - allow: { method: GET, path: "/gmail/v1/users/me/messages" }
+          - allow: { method: GET, path: "/gmail/v1/users/me/messages/*" }
+          - allow: { method: POST, path: "/gmail/v1/users/me/messages/*/modify" }
+          - allow: { method: GET, path: "/gmail/v1/users/me/labels" }
+          - allow: { method: POST, path: "/gmail/v1/users/me/labels" }
+          - allow: { method: GET, path: "/gmail/v1/users/me/drafts" }
+          - allow: { method: GET, path: "/gmail/v1/users/me/drafts/*" }
+          - allow: { method: POST, path: "/gmail/v1/users/me/drafts" }
+        # Deny rules win over allow rules. None of the allows above reach these,
+        # but sending is the one thing Keeper must never do, so say it outright.
+        deny_rules:
+          - { method: "*", path: "/gmail/v1/users/*/messages/send" }
+          - { method: "*", path: "/gmail/v1/users/*/drafts/send" }
+          - { method: "*", path: "/upload/gmail/v1/users/*/messages/send" }
+          - { method: "*", path: "/upload/gmail/v1/users/*/drafts/send" }
+      - host: www.googleapis.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/calendar/v3/calendars/primary/events" }
+          - allow: { method: POST, path: "/calendar/v3/calendars/primary/events" }
+          - allow: { method: GET, path: "/calendar/v3/calendars/primary/events/*" }
+          - allow: { method: PATCH, path: "/calendar/v3/calendars/primary/events/*" }
+    binaries:
+      # Only the Python that runs /sandbox/keeper/bin/keeper.
+      - { path: /opt/hermes/.venv/bin/python }

@@ -95,16 +95,11 @@ class LiveCalendar:
     def from_token_file(
         cls, token_file: Path, db_path: Path, *, calendar_id: str = "primary",
     ) -> "LiveCalendar":
-        try:
-            from google.oauth2.credentials import Credentials
-            from googleapiclient.discovery import build
-        except ImportError as exc:
-            raise RuntimeError("install google-api-python-client and google-auth-oauthlib") from exc
-        credentials = Credentials.from_authorized_user_file(str(token_file))
-        if _SCOPE not in (credentials.scopes or []):
+        from .google_rest import CALENDAR_URL, AccessToken, GoogleService
+        token = AccessToken(token_file)
+        if _SCOPE not in token.scopes:
             raise AuthenticationError("runtime token lacks calendar.events")
-        return cls(build("calendar", "v3", credentials=credentials, cache_discovery=False),
-                   db_path, calendar_id=calendar_id)
+        return cls(GoogleService(CALENDAR_URL, token), db_path, calendar_id=calendar_id)
 
     def check_health(self) -> None:
         """Read one event page without creating or changing an event."""

@@ -12,6 +12,9 @@ Keeper runs on the Hermes agent inside NVIDIA OpenShell, set up with NemoClaw. T
 | `openshell/policies/keeper-tokenfactory.yaml` | Network policy preset that opens Token Factory to Keeper's Python only |
 | `openshell/setup-tokenfactory.sh` | One-time setup: import the profile, create and attach the provider, apply the policy |
 | `openshell/install-google-token.sh` | Install the demo Google OAuth token from WSL into the private sandbox secrets directory |
+| `openshell/setup-google.sh` | Give the sandbox the demo Gmail account: the token, the seed manifest and the `keeper-google` policy |
+| `openshell/policies/keeper-google.yaml` | Network policy preset that opens only the Gmail and Calendar calls Keeper makes, and denies sending mail |
+| `openshell/install-key-file.sh` | Put the Token Factory key in the sandbox for Keeper's router; rerun it to rotate the key |
 | `openshell/setup-telegram.sh` | Configure the Telegram bot and Hermes gateway through NemoClaw on the WSL host |
 | `openshell/install-provider-key.sh` | Install private Telegram and Tavily keys for Keeper's direct API adapters |
 

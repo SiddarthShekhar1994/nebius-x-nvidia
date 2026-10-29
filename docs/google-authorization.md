@@ -32,4 +32,17 @@ Validate the file's presence and permissions without printing its content:
 nemohermes keeper exec -- stat -c '%a %n' /sandbox/keeper/secrets /sandbox/keeper/secrets/google-token.json
 ```
 
-Expect `700` and `600`. The Gmail and Calendar adapters have offline tests but no live account smoke check, so this confirms installation and file permissions only. If Google access is revoked or expires, run authorization again to a new output path and reinstall that file. Revoke the demo app's access in the Google account security settings when the demo is retired. A Google OAuth app in Testing status may issue refresh tokens with limited lifetimes; plan a reauthorization before the demo if needed. [Google OAuth guidance](https://developers.google.com/identity/protocols/oauth2/) explains that limit.
+Expect `700` and `600`. This confirms installation and file permissions only. If Google access is revoked or expires, run authorization again to a new output path and reinstall that file. Revoke the demo app's access in the Google account security settings when the demo is retired. A Google OAuth app in Testing status may issue refresh tokens with limited lifetimes; plan a reauthorization before the demo if needed. [Google OAuth guidance](https://developers.google.com/identity/protocols/oauth2/) explains that limit.
+
+## 3. Open Gmail and Calendar to the sandbox
+
+Once the demo inbox is loaded ([demo/SEED_AND_RESET.md](../demo/SEED_AND_RESET.md)), one script does the token install above plus the two other things Keeper needs in the sandbox: the seed manifest that says which demo emails it may touch, and the `keeper-google` network policy. From Ubuntu/WSL in the repo root:
+
+```bash
+bash agent/openshell/setup-google.sh /mnt/c/Users/YOUR_USER/keeper-secrets/google-token.json
+nemohermes keeper exec -- /sandbox/keeper/bin/keeper health adapters --live --provider gmail
+```
+
+The second line should print `gmail: PASS (live)`. The sandbox denies all network traffic by default, and NemoClaw has no preset for Google's REST APIs, so `agent/openshell/policies/keeper-google.yaml` opens exactly the Gmail and Calendar calls Keeper makes, to Keeper's Python only, and denies Gmail's send endpoints outright. `gmail.modify` alone would let a token send mail; this policy is what makes Keeper draft-only. `tests/test_google_rest.py` fails if the code and the policy drift apart.
+
+Keeper talks to Gmail and Calendar through `integrations/google_rest.py` rather than Google's client library. That library sends through httplib2, which can't use the sandbox's HTTPS proxy without PySocks and trusts certifi's certificates instead of OpenShell's CA bundle, so it fails inside the sandbox with a certificate error. The standard library honours `HTTPS_PROXY` and `SSL_CERT_FILE`, as the Telegram and Tavily adapters already do. The demo inbox tools (`demo.mailbox` seed, ingest and reset) still use Google's library; they run on the host, not in the sandbox.
