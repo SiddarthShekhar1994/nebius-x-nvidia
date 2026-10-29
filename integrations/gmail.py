@@ -152,17 +152,12 @@ class LiveGmail:
 
     @classmethod
     def from_token_file(cls, token_file: Path, *, run_id: str) -> "LiveGmail":
-        """Build from the private runtime token; imports Google libraries only here."""
-        try:
-            from google.oauth2.credentials import Credentials
-            from googleapiclient.discovery import build
-        except ImportError as exc:
-            raise RuntimeError("install google-api-python-client and google-auth-oauthlib") from exc
-        credentials = Credentials.from_authorized_user_file(str(token_file))
-        if _GMAIL_SCOPE not in (credentials.scopes or []):
+        """Build from the private runtime token over Gmail's REST API (see google_rest)."""
+        from .google_rest import GMAIL_URL, AccessToken, GoogleService
+        token = AccessToken(token_file)
+        if _GMAIL_SCOPE not in token.scopes:
             raise AuthenticationError("runtime token lacks gmail.modify")
-        service = build("gmail", "v1", credentials=credentials, cache_discovery=False)
-        return cls(service, run_id=run_id)
+        return cls(GoogleService(GMAIL_URL, token), run_id=run_id)
 
     def check_health(self) -> None:
         """Read-only API and authorization probe; does not inspect inbox content."""
