@@ -85,6 +85,8 @@ class RadarEnrichmentTest(unittest.TestCase):
         self.assertEqual(requests[0][0], "radar")
         self.assertEqual(requests[0][1][0]["role"], "system")
         self.assertNotIn("tools", requests[0][2])
+        # Nano reasons before answering; a small cap cut answers off live.
+        self.assertGreaterEqual(requests[0][2]["max_tokens"], 4096)
 
     def test_eligibility_known_conflict_unknown_and_verified_match(self):
         requirements = VerifiedPostingRequirements(

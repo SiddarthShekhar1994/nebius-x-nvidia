@@ -36,7 +36,8 @@ class DraftRouterModel:
                 "draft", [{"role": "system", "content": SYSTEM},
                           {"role": "user", "content": prompt}],
                 settings=self.settings, client=self.client,
-                max_tokens=512, temperature=0.3,
+                # Super reasons before it writes; 512 tokens cut drafts off.
+                max_tokens=4096, temperature=0.3,
             )
         except openai.APIConnectionError:
             raise ProviderUnavailable("Nebius connection unavailable") from None

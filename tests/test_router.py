@@ -2,14 +2,18 @@
 
 Run from the repo root:  py -m unittest discover tests
 """
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from router import calllog, route, UnknownTaskType
 from router.config import load_settings
 from router.pricing import estimate_cost
+from router.routes import TASK_TIERS
 
 
 def fake_response(model, prompt_tokens=100, completion_tokens=50, content="ok", tool_calls=None):
@@ -48,6 +52,22 @@ class RouterTest(unittest.TestCase):
         client = client or FakeClient()
         route(task_type, [{"role": "user", "content": "hi"}], settings=self.settings, client=client, **kw)
         return client
+
+    def test_smoke_calls_every_task_type_with_room_to_reason(self):
+        from router import __main__ as cli
+
+        calls = []
+
+        def fake_route(task_type, messages, tools, *, settings, max_tokens):
+            calls.append((task_type, max_tokens))
+            tool_calls = [SimpleNamespace(function=SimpleNamespace(name="get_weather", arguments="{}"))]
+            return fake_response(None, tool_calls=tool_calls if tools else None)
+
+        with patch.object(cli, "route", fake_route), patch.object(cli, "cmd_recent", lambda *args: 0), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.cmd_smoke(self.settings), 0)
+        self.assertEqual([task for task, _ in calls], list(TASK_TIERS))
+        self.assertTrue(all(tokens >= 4096 for _, tokens in calls))
 
     def test_each_task_type_goes_to_its_model(self):
         expected = {

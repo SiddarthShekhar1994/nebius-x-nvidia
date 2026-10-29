@@ -32,6 +32,9 @@ SMOKE_PROMPTS = {
                 "Reply with one word. Subject: 'Your weekly digest from Medium'",
     "triage": "Classify this email subject as junk, actionable, due or newsletter. "
               "Reply with one word. Subject: 'Hackathon registration closes Friday at noon'",
+    "radar": "From 1 to 10, how well does this posting fit a computer science student looking "
+             "for a software internship? Reply with the number only. "
+             "Posting: 'Software Engineer Intern, Example Inc, summer 2027'",
     "tool_call": "What is the weather in Paris right now? Use the get_weather tool.",
     "draft": "Draft a two-sentence reply accepting a meeting on Thursday at 3pm.",
     "plan": "List three steps to prepare a hackathon demo video. Under 50 words.",
@@ -50,7 +53,9 @@ def cmd_smoke(settings) -> int:
         tools = [WEATHER_TOOL] if task_type == "tool_call" else None
         messages = [{"role": "user", "content": SMOKE_PROMPTS[task_type]}]
         try:
-            resp = route(task_type, messages, tools, settings=settings, max_tokens=1024)
+            # The Nemotron 3 models reason before they answer; with a small cap a
+            # one-word reply comes back empty, cut off mid-thought.
+            resp = route(task_type, messages, tools, settings=settings, max_tokens=4096)
         except Exception as exc:
             failures += 1
             print(f"[FAIL] {task_type:<11} {type(exc).__name__}: {str(exc)[:150]}")
@@ -68,7 +73,8 @@ def cmd_smoke(settings) -> int:
         else:
             text = (msg.content or "").strip()
             ok = bool(text)
-            detail = text[:70].replace("\n", " ") or "empty reply"
+            detail = text[:70].replace("\n", " ") or \
+                f"empty reply (finish_reason={resp.choices[0].finish_reason})"
         failures += not ok
         print(f"[{'OK  ' if ok else 'FAIL'}] {task_type:<11} {detail}")
     print()
