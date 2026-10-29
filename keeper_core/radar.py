@@ -130,6 +130,14 @@ def build_queries(profile: RadarProfile, *, max_queries: int = 6) -> tuple[str, 
             queries.append(query)
         return len(queries) >= max_queries
 
+    if not profile.roles and not profile.types:
+        for topic in profile.topics[:2]:
+            topic_words = _query_words(topic)
+            if topic_words and add_query((topic_words, "careers apply",
+                                          _query_words(locations[0], 4) if locations else "")):
+                return tuple(queries)
+        return tuple(queries)
+
     for role in roles:
         for kind in types:
             terms = (_query_words(role), _query_words(kind), "careers apply",

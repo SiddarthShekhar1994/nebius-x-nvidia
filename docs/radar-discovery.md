@@ -2,6 +2,31 @@
 
 `keeper_core.radar` loads the private Markdown profile described in [the profile contract](profile.md), builds at most six Tavily queries by default, and requests at most five results per query. Queries use only roles, opportunity types, preferred topics, and one broad location. They omit education and work authorization. User text is reduced to words before it enters a query.
 
+When both target roles and opportunity types are unspecified, radar searches up to two stated interests with the same sanitization and query limits. It does not invent a role or opportunity type. A profile with no roles, types, or usable interests cannot produce a search.
+
+## Run the command
+
+From the checkout, run the synthetic preview without credentials or network access:
+
+```sh
+python3 -m keeper_core.radar_cli run
+```
+
+After deployment, the same entry point is `keeper radar run`. It uses the synthetic `demo/profile.md`, fake Tavily and model responses, a fake Telegram adapter, and a temporary database. Output labels scoring as `simulated` and delivery as `preview`, with no message ID. Even an explicit `--db` is untouched in this mode. Run `python3 -m demo.radar_lifecycle` to also exercise a same-run retry and next-day deduplication.
+
+When the private runtime is ready, these are separate live operations:
+
+```sh
+keeper radar run --live
+keeper radar run --live --apply
+```
+
+`--live` reads `$KEEPER_DATA_DIR/memory/profile.md` (`data/memory/profile.md` in the checkout), or `--profile PATH`. It calls Tavily and Nemotron Nano, so it consumes provider usage and may write the router's usage log. It copies the existing Keeper database read-only into a temporary database to preserve discovery history while previewing; it never sends a real Telegram message or writes the product database.
+
+`--live --apply` saves results to the Keeper database and delivers through the live Telegram adapter. It requires `--recipient CHAT_ID` or `TELEGRAM_CHAT_ID`. `--db PATH` selects the database, otherwise the existing `KEEPER_DB_PATH` / `KEEPER_DATA_DIR` defaults apply. `--secrets-dir DIR` selects `tavily.key` and `telegram-bot.key` (default `/sandbox/keeper/secrets`); Nano uses the existing [router configuration](../router/README.md). Missing credentials fail before searching. No credentials or recipient IDs are printed.
+
+The default run ID is `radar:YYYY-MM-DD` in UTC. Keep the same `--run-id ID` when retrying a run. Query budgets default to six searches with five results each, and accept `--max-queries 1..12` / `--results-per-query 1..20`. The command reuses the existing top-five delivery policy and does not create Calendar events from search snippets. Offline tests cover the live branches with fakes; real provider delivery still needs a runtime smoke test.
+
 `search_opportunities(profile, tavily, discovered_at=utc_time)` returns the exact queries, normalized `Opportunity` records, and a reason for every skipped hit. It prioritizes known application systems and employer career pages, accepts `.edu` and `.gov` opportunity sources, drops known aggregator and unverified page links, removes URL tracking parameters, and deduplicates by canonical URL and normalized organization/title within the run. A result needs an identifiable role and organization in its title; the radar does not invent either from a URL slug. The `source` field is the canonical URL's host, and the discovery time is the supplied UTC run time.
 
 The filter skips explicit closed notices, senior roles for a student profile, clear role mismatches, and explicit profile exclusions. Search snippets are not eligibility evidence. `run_radar` accepts separately verified application-page requirements; without them, eligibility stays `unverified`.

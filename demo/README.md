@@ -13,3 +13,12 @@ Calendar scenario. Synthetic Example Inc emails create and explicitly extend one
 application deadline using the fake Calendar and a temporary database; the JSON
 trace includes replay results and persisted source evidence. It makes no live
 provider or account claims.
+
+Run `python3 -m demo.radar_lifecycle` for the deterministic, offline-synthetic
+radar scenario. One synthetic posting is found, scored with a fake model, and
+delivered to fake Telegram. A same-run retry keeps one message; a second daily
+run adds history without resending it. Eligibility stays unverified, and search
+snippets create no Calendar events. The temporary database is removed afterward.
+
+`python3 -m keeper_core.radar_cli run` previews the same synthetic search through
+the command entry point. See [radar commands and live gates](../docs/radar-discovery.md#run-the-command).

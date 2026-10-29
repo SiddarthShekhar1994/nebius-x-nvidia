@@ -5,7 +5,7 @@ Keeper runs on the Hermes agent inside NVIDIA OpenShell, set up with NemoClaw. T
 | File | What it does |
 | --- | --- |
 | `SOUL.md` | Keeper's persona and hard rules. `deploy.sh` puts it at the top of `/sandbox/.hermes/runtime/SOUL.md` (the one Hermes reads), `/sandbox/.hermes/SOUL.md` and `/sandbox/SOUL.md` (merge code in `skills/soul.py`) |
-| `bin/keeper` | Keeper's command inside the sandbox (`keeper memory`, `keeper skills`, `keeper router`, `keeper health`, `keeper triage`, `keeper apps`) |
+| `bin/keeper` | Keeper's command inside the sandbox (`keeper memory`, `keeper skills`, `keeper router`, `keeper health`, `keeper triage`, `keeper apps`, `keeper act`, `keeper radar`) |
 | `deploy.sh` | Copies code, skills and persona into the sandbox, turns on Hermes's skill write-approval gate and adds the `/teach`, `/keep`, `/drop` and `/apps` quick commands. Rerun it after changes. |
 | `restore.sh` | Puts memory, the router log, the key file and learned skills back into a re-created sandbox |
 | `openshell/tokenfactory-keeper-v1.yaml` | OpenShell provider profile that gives the router all three Nemotron models without putting the key in the sandbox |
@@ -16,6 +16,10 @@ Keeper runs on the Hermes agent inside NVIDIA OpenShell, set up with NemoClaw. T
 | `openshell/install-provider-key.sh` | Install private Telegram and Tavily keys for Keeper's direct API adapters |
 
 Steps and proof checks are in `docs/phase2-memory-skills.md`. Install and sandbox setup are in `docs/phase1-nemoclaw.md`; Google authorization is in `docs/google-authorization.md`; Telegram and Tavily setup is in `docs/telegram-tavily-adapters.md`. Run the [integration health and gateway access checks](../docs/integration-health-and-access.md) after deployment.
+
+`keeper radar run` previews synthetic opportunity discovery offline. Live search
+requires `--live`; saving results and sending the digest additionally requires
+`--apply` and a configured Telegram recipient. See [radar usage](../docs/radar-discovery.md#run-the-command).
 
 ## Application tracker
 

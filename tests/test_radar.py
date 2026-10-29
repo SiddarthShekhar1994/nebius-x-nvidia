@@ -41,6 +41,19 @@ class RadarTest(unittest.TestCase):
         self.assertNotIn(":", query)
         self.assertNotIn('"', query)
 
+    def test_topics_only_profile_builds_sanitized_bounded_queries(self):
+        changed = replace(self.profile, roles=(), types=(),
+                          topics=('AI infrastructure site:private.test "secret"', 'second topic'))
+        queries = build_queries(changed, max_queries=1)
+        self.assertEqual(queries, ('AI infrastructure site private test secret careers apply United States',))
+        self.assertNotIn("2027", queries[0])
+        self.assertNotIn("Computer Science", queries[0])
+        self.assertNotIn("authorization", queries[0].lower())
+
+    def test_topics_only_profile_without_topics_keeps_queries_empty(self):
+        changed = replace(self.profile, roles=(), types=(), topics=())
+        self.assertEqual(build_queries(changed), ())
+
     def test_primary_source_normalization_and_duplicate_filter(self):
         hits = (
             SearchHit("https://www.linkedin.com/jobs/view/123", "Software Engineer Intern at Acme", "Apply now", "linkedin.com"),

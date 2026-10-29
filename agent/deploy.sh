@@ -24,6 +24,7 @@ mkdir -p "$STAGE/app" "$STAGE/bin" "$STAGE/skills"
 cp -r "$ROOT/router" "$ROOT/memory" "$ROOT/skills" "$ROOT/keeper_core" "$ROOT/integrations" "$ROOT/triage" "$ROOT/actions" "$STAGE/app/"
 mkdir -p "$STAGE/app/demo/fixtures"
 cp "$ROOT/demo/fixtures/inbox_75.json" "$STAGE/app/demo/fixtures/"
+cp "$ROOT/demo/profile.md" "$ROOT/demo/radar_lifecycle.py" "$STAGE/app/demo/"
 rm -rf "$STAGE/app/skills/hermes"
 find "$STAGE/app" -name __pycache__ -prune -exec rm -rf {} +
 cp "$ROOT/agent/bin/keeper" "$STAGE/bin/keeper"
