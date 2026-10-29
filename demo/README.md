@@ -14,6 +14,8 @@ application deadline using the fake Calendar and a temporary database; the JSON
 trace includes replay results and persisted source evidence. It makes no live
 provider or account claims.
 
+[STORY.md](STORY.md) is the demo story for the video: one tracked internship moving through the tracker, the calendar and drafts, run with `bash agent/demo-story.sh`.
+
 Run `python3 -m demo.radar_lifecycle` for the deterministic, offline-synthetic
 radar scenario. One synthetic posting is found, scored with a fake model, and
 delivered to fake Telegram. A same-run retry keeps one message; a second daily
