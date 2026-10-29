@@ -45,7 +45,7 @@ def post_json(url: str, body: dict, headers: dict[str, str], timeout: float) -> 
         except (TypeError, ValueError):
             retry_after = None
         raise HttpFailure(exc.code, error_body, retry_after) from None
-    except (URLError, TimeoutError, socket.timeout, OSError) as exc:
+    except (URLError, TimeoutError, socket.timeout, OSError):
         raise ProviderUnavailable("provider transport failed or timed out") from None
     if len(payload) > 2_000_000:
         raise InvalidProviderResponse("provider response exceeds size limit")

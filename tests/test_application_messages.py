@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from keeper_core.application_messages import detect_application_signal, process_application_email
+from keeper_core.application_messages import process_application_email
 from keeper_core.applications import create_application, get_application
 from keeper_core.contracts import ApplicationStatus, EmailRecord, IngestionMetadata
 from keeper_core.db import migrate

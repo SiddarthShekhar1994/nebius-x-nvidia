@@ -23,7 +23,7 @@ from tests.test_gmail_live import Service
 from tests.test_triage import FakeModel, UTC_TIME, email, payload
 from triage.classifier import classify_email
 from triage.preview import load_emails
-from triage.sources import FixtureSource, GmailSource
+from triage.sources import GmailSource
 from triage.store import ResultStore
 from triage.run import run_triage
 from triage.__main__ import main

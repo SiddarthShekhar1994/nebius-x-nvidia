@@ -1,0 +1,51 @@
+# Runs on every pull request and every push to main. Everything is offline:
+# no secrets, no Gmail, no model calls.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The sandbox's Python, the WSL demo tools' Python, and the team's Windows laptops.
+          - { os: ubuntu-latest, python: "3.13" }
+          - { os: ubuntu-latest, python: "3.12" }
+          - { os: windows-latest, python: "3.14" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install
+        run: python -m pip install -r requirements.txt
+      - name: Tests
+        run: python -m unittest discover -s tests
+
+  lint:
+    name: Lint and script syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Pyflakes
+        run: python -m pip install pyflakes && python -m pyflakes .
+      - name: Shell scripts parse
+        run: for script in agent/*.sh agent/openshell/*.sh agent/bin/keeper; do bash -n "$script"; done

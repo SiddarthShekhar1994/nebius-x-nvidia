@@ -85,6 +85,7 @@ class ApplicationTelegramTest(unittest.TestCase):
         self.assertIn("not ready", output.getvalue())
         self.assertFalse(missing.exists())
 
+    @unittest.skipIf(os.name == "nt", "runs the bash launcher; WSL or Linux only")
     def test_gateway_quick_command_dispatch_is_configured(self):
         deploy = (ROOT / "agent/deploy.sh").read_text(encoding="utf-8")
         self.assertIn('"apps": {"type": "exec", "command": "/sandbox/keeper/bin/keeper apps telegram"}', deploy)
