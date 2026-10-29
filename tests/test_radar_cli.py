@@ -29,6 +29,7 @@ class RadarCliTest(unittest.TestCase):
         from demo.radar_lifecycle import offline_adapters
         return offline_adapters(load_profile(PROFILE))
 
+    @unittest.skipIf(os.name == "nt", "runs the bash launcher; WSL or Linux only")
     def test_packaged_launcher_works_outside_checkout_without_private_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

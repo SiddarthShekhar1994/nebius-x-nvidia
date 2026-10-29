@@ -76,6 +76,8 @@ def _http_error(exc: HTTPError, status: int | None = None) -> GoogleHttpError:
         content = exc.read(MAX_ERROR)
     except OSError:
         content = b""
+    finally:
+        exc.close()
     headers = dict(exc.headers.items()) if exc.headers else {}
     return GoogleHttpError(status or exc.code, content, headers)
 
@@ -157,6 +159,7 @@ class GoogleService:
                 break
             except HTTPError as exc:
                 if exc.code == 401 and attempt == 1:
+                    exc.close()
                     continue  # the access token lapsed early; refresh it once
                 raise _http_error(exc) from None
         if len(payload) > MAX_RESPONSE:

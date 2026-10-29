@@ -142,6 +142,7 @@ class ApplicationCliTest(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT count(*) FROM correction_records").fetchone()[0], 2)
         self.assertEqual(self.conn.execute("SELECT count(*) FROM application_status_changes").fetchone()[0], 3)
 
+    @unittest.skipIf(os.name == "nt", "runs the bash launcher; WSL or Linux only")
     def test_dispatch_through_keeper_shell(self):
         env = dict(os.environ, KEEPER_APP_DIR=str(ROOT), KEEPER_PYTHON=sys.executable)
         proc = subprocess.run([str(ROOT / "agent/bin/keeper"), "apps", "--db", str(self.path), "list"],

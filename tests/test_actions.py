@@ -126,7 +126,8 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual((result[("drafts", "m1")][0], result[("drafts", "m2")][0]), (DONE, DONE))
         self.assertFalse([key for key in result if key[1] == "m7"])           # scams get no action at all
 
-        [app] = list_applications(sqlite3.connect(self.db))
+        with closing(sqlite3.connect(self.db)) as conn:
+            [app] = list_applications(conn)
         self.assertEqual(app.status.value, "interview")
         self.assertEqual(len(ctx.calendar.events_by_key), 1)                   # the extension moved the one event
         [(event_id, _, deadline_at, _)] = ctx.calendar.events_by_key.values()

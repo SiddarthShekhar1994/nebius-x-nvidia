@@ -1,3 +1,5 @@
 openai>=1.40
 google-auth-oauthlib>=1.2
 google-api-python-client>=2.0
+# Windows has no IANA time zone database; zoneinfo needs this to know America/Los_Angeles.
+tzdata; sys_platform == "win32"
