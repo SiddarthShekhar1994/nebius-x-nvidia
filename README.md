@@ -1,37 +1,11 @@
-# Keeper
+# Keeper offline evidence dashboard
 
-Keeper is an always-on personal assistant for students, built for the Personal AI track of the Nebius x NVIDIA Global AI Hackathon. It reads a demo inbox and calendar, keeps an eye out for internships and hackathons, and reports back over Telegram. When you correct it, it writes the correction down as a skill so it doesn't make the same mistake twice.
+Generate from available artifacts (read-only):
 
-It runs as a Hermes agent inside NVIDIA OpenShell, set up with NemoClaw. Inference goes to Nemotron 3 models (Nano, Super and Ultra) on Nebius Token Factory.
+```bash
+python dashboard/generate.py --keeper-db path/to/keeper.db --router-db path/to/router.db --eval-json eval/results.json --output dashboard/report.html
+```
 
-## Status
+Missing inputs are displayed as unavailable/zero records, not fabricated metrics. `report.html` is self-contained and works offline. **Do not commit a dashboard generated from real personal inbox data** without review. No raw email contents, security destinations, or tokens are rendered. Router counts exclude Hermes-native traffic not logged by the router. No claim of 98.7% accuracy is shown unless supplied by actual evaluation artifacts.
 
-- **Phase 1, feasibility:** done. The verdict was go; see [docs/phase1-report.md](docs/phase1-report.md).
-- **Phase 2, the working assistant:** in progress. Items 1 to 3 are done: repo scaffold, model router, and memory and skills ([item 3 report](docs/phase2-item3-report.md)). Next are inbox and calendar triage, the opportunity radar, and the OpenShell network policy.
-- **Phase 4 triage implementation:** saved decisions, verified demo Gmail dry-run/apply, restart-safe label replay, and fixture comparison are implemented. Offline acceptance passes; live provider and sandbox acceptance remain pending. See the [usage guide](triage/README.md) and [acceptance checklist](docs/phase4-triage-report.md).
-
-## Layout
-
-| Folder | What goes in it |
-| --- | --- |
-| `agent/` | Hermes configuration for the `keeper` sandbox (persona, config) |
-| `router/` | Picks Nano, Super or Ultra per task and logs every call to SQLite |
-| `skills/` | Keeper's skills as markdown: built-in triage and radar, plus skills learned from corrections |
-| `memory/` | Long-term memory store (markdown files on the sandbox's persistent volume) |
-| `dashboard/` | Phase 3 view of model usage, latency and cost |
-| `demo/` | Demo script and sample data. Never real inbox content. |
-| `docs/` | Setup steps, phase reports |
-| `scripts/` | Developer utilities, including the phase 1 Token Factory probe |
-
-## Setup
-
-1. Install NemoClaw with the Hermes agent and connect it to Token Factory by following [docs/phase1-nemoclaw.md](docs/phase1-nemoclaw.md).
-2. For local development, copy `.env.example` to `.env` and fill in your keys. Inside the sandbox, the OpenShell gateway holds the keys instead.
-
-## Feedback
-
-[NOTES_FEEDBACK.md](NOTES_FEEDBACK.md) logs everything that broke or was confusing in Token Factory, NemoClaw, OpenShell, Hermes and Nemotron while building this.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+This is a minimal Phase 11 dashboard skeleton. Remaining work: integrate the team's final eval JSON schema, replay, charts, and security proof after their sources are available.
