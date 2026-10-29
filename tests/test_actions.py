@@ -192,10 +192,10 @@ class FixtureCommandTest(unittest.TestCase):
                 report = json.loads(out.getvalue())
                 self.assertEqual(report["decisions"], 75)
                 self.assertNotIn(FAILED, json.dumps(report["summary"]))
-                # Fixture mail isn't Gmail, and nothing in it names a tracked opportunity, so no deadline
-                # is scheduled. 9 of its 19 deadlines use phrasings the extractor has no cue for.
+                # Fixture mail isn't Gmail, and nothing in it names a tracked opportunity: every one of
+                # the 19 deadlines is found (#14 added the missing cues) and held for review.
                 self.assertEqual(set(report["summary"]["drafts"]), {SKIPPED})
-                self.assertEqual(report["summary"]["deadlines"], {REVIEW: 10, SKIPPED: 9})
+                self.assertEqual(report["summary"]["deadlines"], {REVIEW: 19})
 
     def test_a_source_is_required_and_gmail_needs_its_account(self):
         for argv in (["run", "--db", str(self.db)], ["run", "--db", str(self.db), "--gmail"],

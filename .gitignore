@@ -13,3 +13,6 @@ token*.json
 *token*.json
 client_secret*.json
 credentials*.json
+
+# Generated reports can contain inbox-derived data.
+dashboard/report.html
