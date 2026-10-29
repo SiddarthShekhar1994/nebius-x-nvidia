@@ -12,8 +12,10 @@ from .adapters import CalendarAdapter, ModelAdapter, TavilyAdapter, TelegramAdap
 from .calendar_deadlines import CalendarSyncResult
 from .contracts import Eligibility
 from .db import migrate
+from .posting_calendar import schedule_reviewed_deadline
+from .posting_reviews import get_posting_review, parse_posting_evidence, reviewed_requirements
 from .radar import RadarProfile, RadarRunOutcome, run_radar
-from .radar_deadlines import VerifiedPostingDeadline, sync_posting_deadline
+from .radar_deadlines import VerifiedPostingDeadline
 from .radar_digest import DigestResult, send_radar_digest
 from .radar_enrichment import VerifiedPostingRequirements
 
@@ -39,9 +41,11 @@ def run_daily_radar(db_path: Path, profile: RadarProfile, tavily: TavilyAdapter,
     migrate(db_path)
     with closing(sqlite3.connect(db_path, timeout=10)) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
+        requirements = reviewed_requirements(conn)
+        requirements.update(verified_requirements or {})
         radar = run_radar(
             profile, tavily, model, conn, run_id=run_id, discovered_at=now,
-            verified_requirements=verified_requirements,
+            verified_requirements=requirements,
             max_queries=max_queries, results_per_query=results_per_query,
         )
         conn.commit()
@@ -50,12 +54,28 @@ def run_daily_radar(db_path: Path, profile: RadarProfile, tavily: TavilyAdapter,
     scheduled: list[tuple[str, CalendarSyncResult]] = []
     if calendar is not None:
         for opportunity in radar.results.opportunities:
-            if opportunity.eligibility is Eligibility.INELIGIBLE:
-                continue
             deadline = (verified_deadlines or {}).get(opportunity.canonical_url)
             if deadline is not None:
-                result = sync_posting_deadline(
-                    db_path, calendar, opportunity_id=opportunity.id, deadline=deadline, now=now,
-                )
+                with closing(sqlite3.connect(db_path, timeout=10)) as conn:
+                    latest = conn.execute(
+                        """SELECT id FROM posting_reviews WHERE opportunity_id = ?
+                           ORDER BY reviewed_at DESC, rowid DESC LIMIT 1""", (opportunity.id,),
+                    ).fetchone()
+                    review = get_posting_review(conn, latest[0]) if latest else None
+                if opportunity.eligibility is not Eligibility.ELIGIBLE or not review or not review["approved_by"]:
+                    result = CalendarSyncResult("review", None, None,
+                                                "confirmed eligibility and saved deadline approval are required")
+                else:
+                    evidence = parse_posting_evidence({key: review[key] for key in (
+                        "opportunity_id", "source_url", "source_excerpt", "requirements", "deadline_timestamp",
+                    )})
+                    if evidence.deadline != deadline:
+                        result = CalendarSyncResult("review", None, None,
+                                                    "deadline does not match the approved page revision")
+                    else:
+                        result = schedule_reviewed_deadline(
+                            db_path, calendar, review["id"], approved_by=review["approved_by"],
+                            reason=review["approval_reason"], now=now,
+                        )
                 scheduled.append((opportunity.id, result))
     return DailyRadarResult(radar, digest, tuple(scheduled))

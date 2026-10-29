@@ -20,6 +20,10 @@ Steps and proof checks are in `docs/phase2-memory-skills.md`. Install and sandbo
 `keeper radar run` previews synthetic opportunity discovery offline. Live search
 requires `--live`; saving results and sending the digest additionally requires
 `--apply` and a configured Telegram recipient. See [radar usage](../docs/radar-discovery.md#run-the-command).
+`keeper radar review`, `reviews`, `schedule`, and `digest` expose the
+[reviewed page and approval workflow](../docs/reviewed-postings.md). Telegram
+requires confirmed eligibility and at least 7/10 relevance; Calendar requires
+an explicit approval of the latest eligible page review.
 
 ## Application tracker
 

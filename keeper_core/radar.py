@@ -257,6 +257,20 @@ def search_opportunities(profile: RadarProfile, tavily: TavilyAdapter, *, discov
     return RadarResults(queries, result.opportunities, result.skipped)
 
 
+def _recorded_opportunity_owner(conn: sqlite3.Connection, url: str) -> str | None:
+    canonical = conn.execute(
+        "SELECT id FROM opportunities WHERE canonical_url = ?", (url,),
+    ).fetchall()
+    observed = conn.execute(
+        "SELECT DISTINCT opportunity_id FROM opportunity_observations WHERE observed_url = ?",
+        (url,),
+    ).fetchall()
+    owners = {row[0] for row in canonical + observed}
+    if len(owners) > 1:
+        raise ValueError("recorded posting URL has conflicting opportunity owners")
+    return next(iter(owners), None)
+
+
 def run_radar(profile: RadarProfile, tavily: TavilyAdapter, model: ModelAdapter,
               conn: sqlite3.Connection, *, run_id: str, discovered_at: datetime,
               verified_requirements: Mapping[str, VerifiedPostingRequirements] | None = None,
@@ -286,12 +300,25 @@ def run_radar(profile: RadarProfile, tavily: TavilyAdapter, model: ModelAdapter,
     skipped = list(normalized.skipped)
     evidence = verified_requirements or {}
     for opportunity in normalized.opportunities:
+        requirements = evidence.get(opportunity.canonical_url)
+        if requirements is not None and canonical_url(requirements.source_url) != opportunity.canonical_url:
+            candidate_owner = _recorded_opportunity_owner(conn, opportunity.canonical_url)
+            source_url = canonical_url(requirements.source_url)
+            source_owner = _recorded_opportunity_owner(conn, source_url)
+            if candidate_owner is None or source_owner != candidate_owner:
+                raise ValueError("reviewed requirements source is not recorded for this opportunity")
         try:
             scored = score_opportunity(profile, opportunity, by_url[opportunity.canonical_url], model)
         except InvalidProviderResponse as exc:
             skipped.append(SkippedHit(opportunity.canonical_url, f"Nano relevance score unavailable: {exc}"))
             continue
-        accepted.append(check_eligibility(profile, scored, evidence.get(opportunity.canonical_url)))
+        if requirements is not None and canonical_url(requirements.source_url) != opportunity.canonical_url:
+            checked = check_eligibility(
+                profile, replace(scored, canonical_url=canonical_url(requirements.source_url)), requirements,
+            )
+            accepted.append(replace(checked, canonical_url=opportunity.canonical_url))
+        else:
+            accepted.append(check_eligibility(profile, scored, requirements))
     persisted = persist_radar_run(conn, tuple(accepted), run_id=run_id)
     resolved = tuple(replace(item, id=keeper_id)
                      for item, keeper_id in zip(accepted, persisted.resolved_ids))

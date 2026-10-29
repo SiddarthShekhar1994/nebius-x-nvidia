@@ -133,7 +133,7 @@ class RadarHistoryTest(unittest.TestCase):
     def setUp(self):
         self.tmp = TemporaryDirectory()
         path = Path(self.tmp.name) / "keeper.db"
-        self.assertEqual(migrate(path), 7)
+        self.assertEqual(migrate(path), 9)
         self.conn = sqlite3.connect(path)
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.profile = load_profile(PROFILE)

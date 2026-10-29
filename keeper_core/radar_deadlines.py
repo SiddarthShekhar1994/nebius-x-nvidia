@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .adapters import CalendarAdapter, IdempotencyConflict
 from .calendar_deadlines import CalendarSyncResult
-from .deadlines import DeadlineReviewRequired, validate_calendar_instant
+from .deadlines import DeadlineReviewPolicy, DeadlineReviewRequired, validate_calendar_instant
 from .time import from_storage, to_storage
 from .workflow import canonical_url, stable_key
 
@@ -37,18 +37,32 @@ class VerifiedPostingDeadline:
             raise ValueError("deadline instant does not match source timestamp")
 
 
-def sync_posting_deadline(db_path: Path, calendar: CalendarAdapter, *, opportunity_id: str,
-                          deadline: VerifiedPostingDeadline, now: datetime) -> CalendarSyncResult:
-    """Use the existing one-event-per-opportunity Calendar identity.
+def posting_deadline_revision(opportunity_id: str, deadline: VerifiedPostingDeadline) -> str:
+    """Return the approval identity for this exact page-backed deadline revision."""
+    return stable_key("posting-deadline", opportunity_id, canonical_url(deadline.source_url),
+                      deadline.raw_timestamp, deadline.source_excerpt)
 
-    A pending row is committed before the provider call. Changed dates require
-    review rather than replacing an email-backed or prior page-backed event.
+
+def sync_posting_deadline(db_path: Path, calendar: CalendarAdapter, *, opportunity_id: str,
+                          deadline: VerifiedPostingDeadline, now: datetime,
+                          policy: DeadlineReviewPolicy | None = None) -> CalendarSyncResult:
+    """Synchronize trusted, explicitly approved source evidence under one event identity.
+
+    Operator entry points use schedule_reviewed_deadline to validate the latest
+    saved review and approval; this lower-level helper accepts trusted policy
+    objects. A pending row is committed before the provider call.
     """
     if now.tzinfo is not timezone.utc:
         raise ValueError("now must be UTC")
     validate_calendar_instant(deadline.deadline_at, now=now)
     if deadline.deadline_at <= now:
         raise DeadlineReviewRequired("application-page deadline is not in the future")
+    if policy is not None and (
+        policy.candidate_id != posting_deadline_revision(opportunity_id, deadline)
+        or policy.confirmed_at != deadline.deadline_at
+        or policy.approved_at > now
+    ):
+        raise DeadlineReviewRequired("review policy does not match this application-page deadline")
     db_path = Path(db_path)
     if not db_path.is_file():
         raise ValueError("Keeper database does not exist")
@@ -58,10 +72,13 @@ def sync_posting_deadline(db_path: Path, calendar: CalendarAdapter, *, opportuni
     with closing(sqlite3.connect(db_path, timeout=10)) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
         opportunity = conn.execute(
-            "SELECT organization, title, canonical_url FROM opportunities WHERE id = ?", (opportunity_id,),
+            "SELECT organization, title, canonical_url, eligibility FROM opportunities WHERE id = ?", (opportunity_id,),
         ).fetchone()
         if opportunity is None:
             raise ValueError("opportunity does not exist")
+        if opportunity[3] != "eligible":
+            return CalendarSyncResult("review", event_id, None,
+                                      "confirmed eligibility is required before Calendar creation")
         observed = conn.execute(
             "SELECT 1 FROM opportunity_observations WHERE opportunity_id = ? AND observed_url = ? LIMIT 1",
             (opportunity_id, observed_url),
@@ -73,6 +90,9 @@ def sync_posting_deadline(db_path: Path, calendar: CalendarAdapter, *, opportuni
             (event_id,),
         ).fetchone()
         if existing is None:
+            if policy is None:
+                return CalendarSyncResult("review", event_id, None,
+                                          "new application-page deadline needs explicit approval")
             with conn:
                 conn.execute(
                     """INSERT INTO deadline_events
@@ -82,38 +102,54 @@ def sync_posting_deadline(db_path: Path, calendar: CalendarAdapter, *, opportuni
                      to_storage(now), to_storage(now)),
                 )
             provider_id = None
+            prior_stamp = None
         else:
             old_stamp, old_evidence, provider, provider_id = existing
             if provider not in (None, "google-calendar"):
                 raise IdempotencyConflict("deadline belongs to another provider")
-            if from_storage(old_stamp) != deadline.deadline_at:
-                return CalendarSyncResult("review", event_id, provider_id,
-                                          "changed application-page deadline needs review")
+            prior_stamp = from_storage(old_stamp)
+            if prior_stamp != deadline.deadline_at:
+                if policy is None:
+                    return CalendarSyncResult("review", event_id, provider_id,
+                                              "changed application-page deadline needs review")
+                if provider_id is None:
+                    return CalendarSyncResult("review", event_id, None,
+                                              "pending deadline creation needs review before changing date")
             if provider_id:
-                with conn:
-                    conn.execute(
-                        "UPDATE opportunities SET deadline = ?, deadline_evidence = ? WHERE id = ?",
-                        (to_storage(deadline.deadline_at), evidence, opportunity_id),
-                    )
-                return CalendarSyncResult("unchanged", event_id, provider_id,
-                                          "deadline already scheduled")
-            if old_evidence != evidence:
+                if prior_stamp == deadline.deadline_at:
+                    if old_evidence != evidence and policy is None:
+                        return CalendarSyncResult("review", event_id, provider_id,
+                                                  "changed page evidence needs matching review")
+                    if old_evidence == evidence:
+                        with conn:
+                            conn.execute(
+                                "UPDATE opportunities SET deadline = ?, deadline_evidence = ? WHERE id = ?",
+                                (to_storage(deadline.deadline_at), evidence, opportunity_id),
+                            )
+                        return CalendarSyncResult("unchanged", event_id, provider_id,
+                                                  "deadline already scheduled")
+            elif old_evidence != evidence:
                 return CalendarSyncResult("review", event_id, None,
                                           "pending deadline has different source evidence")
+    if policy is None:
+        return CalendarSyncResult("review", event_id, provider_id,
+                                  "Calendar writes require explicit deadline approval")
     summary = f"Application deadline: {opportunity[0]} — {opportunity[1]}"
+    was_created = provider_id is None
     provider_id = calendar.upsert_deadline(
         event_id, deadline.deadline_at, summary, idempotency_key=event_id,
-        provider_event_id=provider_id,
+        provider_event_id=provider_id, review_policy=policy,
     )
     with closing(sqlite3.connect(db_path, timeout=10)) as conn, conn:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute(
-            """UPDATE deadline_events SET provider = 'google-calendar', provider_event_id = ?,
-               updated_at = ? WHERE id = ?""",
-            (provider_id, to_storage(now), event_id),
+            """UPDATE deadline_events SET deadline_at = ?, evidence = ?, provider = 'google-calendar',
+               provider_event_id = ?, updated_at = ? WHERE id = ?""",
+            (to_storage(deadline.deadline_at), evidence, provider_id, to_storage(now), event_id),
         )
         conn.execute(
             "UPDATE opportunities SET deadline = ?, deadline_evidence = ? WHERE id = ?",
             (to_storage(deadline.deadline_at), evidence, opportunity_id),
         )
-    return CalendarSyncResult("created", event_id, provider_id, "calendar event synchronized")
+    return CalendarSyncResult("created" if was_created else "updated", event_id, provider_id,
+                              "calendar event synchronized")

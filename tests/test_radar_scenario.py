@@ -26,12 +26,12 @@ class RadarScenarioTest(unittest.TestCase):
         self.assertEqual(report["candidate"]["eligibility"], "unverified")
         self.assertIsNone(report["candidate"]["deadline"])
         self.assertEqual([run["dedupe"] for run in report["runs"]],
-                         ["new_candidate", "same_run_retry", "known_candidate_not_resent"])
-        self.assertEqual([run["digest"] for run in report["runs"]], ["sent", "sent", "empty"])
+                         ["new_candidate", "same_run_retry", "known_candidate_held_unverified"])
+        self.assertEqual([run["digest"] for run in report["runs"]], ["empty", "empty", "empty"])
         self.assertEqual(report["counts"], {
             "stored_opportunities": 1,
             "history_observations": 2,
-            "telegram_messages": 1,
+            "telegram_messages": 0,
             "calendar_writes": 0,
         })
 

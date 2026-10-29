@@ -29,6 +29,12 @@ class RadarCliTest(unittest.TestCase):
         from demo.radar_lifecycle import offline_adapters
         return offline_adapters(load_profile(PROFILE))
 
+    def verified_requirements(self):
+        from demo.radar_lifecycle import HIT
+        from keeper_core.radar_enrichment import VerifiedPostingRequirements
+        return {HIT.url: VerifiedPostingRequirements(
+            HIT.url, "The full synthetic requirements section has no restrictions.", complete=True)}
+
     def test_packaged_launcher_works_outside_checkout_without_private_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -36,7 +42,7 @@ class RadarCliTest(unittest.TestCase):
             shutil.copytree(ROOT / "keeper_core", app / "keeper_core",
                             ignore=shutil.ignore_patterns("__pycache__"))
             (app / "demo").mkdir()
-            for name in ("profile.md", "radar_lifecycle.py"):
+            for name in ("profile.md", "radar_lifecycle.py", "reviewed_posting.json", "reviewed_radar_lifecycle.py"):
                 shutil.copy2(ROOT / "demo" / name, app / "demo" / name)
             data = root / "private-data"
             completed = subprocess.run(
@@ -49,9 +55,15 @@ class RadarCliTest(unittest.TestCase):
             report = json.loads(completed.stdout)
             self.assertEqual((report["mode"], report["source"]), ("preview", "synthetic"))
             self.assertEqual(len(report["opportunities"]), 1)
-            self.assertEqual(report["digest"]["status"], "preview")
+            self.assertEqual(report["digest"]["status"], "empty")
             self.assertIsNone(report["digest"]["message_id"])
             self.assertFalse(data.exists())
+            scenario = subprocess.run(
+                [sys.executable, "-m", "demo.reviewed_radar_lifecycle"], cwd=root,
+                env={"PATH": os.defpath, "PYTHONPATH": str(app), "PYTHONDONTWRITEBYTECODE": "1"},
+                text=True, capture_output=True, check=True,
+            )
+            self.assertEqual(json.loads(scenario.stdout)["counts"]["calendar_events"], 1)
 
     def test_default_is_synthetic_preview_and_never_touches_requested_db(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -67,7 +79,7 @@ class RadarCliTest(unittest.TestCase):
             report = json.loads(output.getvalue())
             self.assertEqual((report["mode"], report["source"], report["scoring"]),
                              ("preview", "synthetic", "simulated"))
-            self.assertEqual(report["digest"]["status"], "preview")
+            self.assertEqual(report["digest"]["status"], "empty")
             self.assertIsNone(report["digest"]["message_id"])
             self.assertEqual(len(report["opportunities"]), 1)
             self.assertEqual(db.read_bytes(), original)
@@ -99,7 +111,8 @@ class RadarCliTest(unittest.TestCase):
     def test_apply_persists_and_replay_does_not_send_twice(self):
         tavily, model = self.adapters()
         telegram = FakeTelegram()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("keeper_core.radar_delivery.reviewed_requirements", return_value=self.verified_requirements()):
             db = Path(directory) / "keeper.db"
             arguments = ["run", "--live", "--apply", "--profile", str(PROFILE),
                          "--db", str(db), "--recipient", "test-chat", "--run-id", "cli:one"]
@@ -127,7 +140,8 @@ class RadarCliTest(unittest.TestCase):
     def test_live_preview_uses_readonly_database_copy_and_no_live_telegram(self):
         tavily, model = self.adapters()
         telegram = FakeTelegram()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("keeper_core.radar_delivery.reviewed_requirements", return_value=self.verified_requirements()):
             db = Path(directory) / "keeper.db"
             apply_args = ["run", "--live", "--apply", "--profile", str(PROFILE), "--db", str(db),
                           "--recipient", "test-chat", "--run-id", "cli:stored"]
@@ -140,7 +154,7 @@ class RadarCliTest(unittest.TestCase):
                     patch("keeper_core.radar_cli._live_telegram", side_effect=AssertionError("delivery")), \
                     contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(main(["run", "--live", "--profile", str(PROFILE), "--db", str(db),
-                                       "--run-id", "cli:preview"]), 0)
+                                       "--run-id", "cli:preview", "--recipient", "test-chat"]), 0)
             report = json.loads(output.getvalue())
             self.assertEqual(report["source"], "live")
             self.assertEqual(report["digest"]["status"], "empty")

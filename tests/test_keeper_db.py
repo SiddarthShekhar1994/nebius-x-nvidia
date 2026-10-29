@@ -18,7 +18,7 @@ class KeeperDatabaseTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.db = Path(self.tmp.name) / "nested" / "keeper.db"
-        self.assertEqual(migrate(self.db), 7)
+        self.assertEqual(migrate(self.db), 9)
         self.conn = sqlite3.connect(self.db)
         self.conn.execute("PRAGMA foreign_keys = ON")
 
@@ -47,9 +47,9 @@ class KeeperDatabaseTest(unittest.TestCase):
     def test_bootstrap_is_idempotent_and_keeps_data(self):
         self.email()
         self.conn.commit()
-        self.assertEqual(migrate(self.db), 7)
+        self.assertEqual(migrate(self.db), 9)
         self.assertEqual(self.conn.execute("SELECT count(*) FROM email_records").fetchone()[0], 1)
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 7)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 9)
 
     def test_version_three_history_gets_evidence_and_outcome_on_upgrade(self):
         legacy = Path(self.tmp.name) / "v3.db"
@@ -78,7 +78,7 @@ class KeeperDatabaseTest(unittest.TestCase):
                    (id, application_id, status, changed_at, reason)
                    VALUES ('change', 'app', 'decision', ?, 'Rejection email')""", (STAMP,),
             )
-        self.assertEqual(migrate(legacy), 7)
+        self.assertEqual(migrate(legacy), 9)
         with closing(sqlite3.connect(legacy)) as conn:
             self.assertEqual(conn.execute(
                 "SELECT source_evidence, decision_outcome FROM application_status_changes"
@@ -169,33 +169,14 @@ class KeeperDatabaseTest(unittest.TestCase):
     def test_failed_migration_does_not_advance_version_or_leave_tables(self):
         directory = Path(self.tmp.name) / "migrations"
         directory.mkdir()
-        (directory / "001_initial.sql").write_text(
-            (MIGRATIONS / "001_initial.sql").read_text(encoding="utf-8"), encoding="utf-8"
-        )
-        (directory / "002_ingestion_outcomes.sql").write_text(
-            (MIGRATIONS / "002_ingestion_outcomes.sql").read_text(), encoding="utf-8"
-        )
-        (directory / "003_triage_account.sql").write_text(
-            (MIGRATIONS / "003_triage_account.sql").read_text(), encoding="utf-8"
-        )
-        (directory / "004_application_evidence.sql").write_text(
-            (MIGRATIONS / "004_application_evidence.sql").read_text(), encoding="utf-8"
-        )
-        (directory / "005_application_activity.sql").write_text(
-            (MIGRATIONS / "005_application_activity.sql").read_text(), encoding="utf-8"
-        )
-        (directory / "006_radar_observations.sql").write_text(
-            (MIGRATIONS / "006_radar_observations.sql").read_text(), encoding="utf-8"
-        )
-        (directory / "007_radar_digest_snapshots.sql").write_text(
-            (MIGRATIONS / "007_radar_digest_snapshots.sql").read_text(), encoding="utf-8"
-        )
-        (directory / "008_broken.sql").write_text(
+        for source in MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql"):
+            (directory / source.name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        (directory / "010_broken.sql").write_text(
             "CREATE TABLE should_rollback (id TEXT);\nINVALID SQL;\n", encoding="utf-8"
         )
         with self.assertRaises(sqlite3.Error):
             migrate(self.db, migrations_dir=directory)
-        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 7)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 9)
         self.assertIsNone(self.conn.execute(
             "SELECT name FROM sqlite_master WHERE name = 'should_rollback'"
         ).fetchone())
@@ -207,9 +188,9 @@ class KeeperDatabaseTest(unittest.TestCase):
             [sys.executable, str(script), "--db", str(path)],
             cwd=self.tmp.name, text=True, capture_output=True, check=True,
         )
-        self.assertIn("schema version 7", result.stdout)
+        self.assertIn("schema version 9", result.stdout)
         with closing(sqlite3.connect(path)) as conn, conn:
-            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 7)
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 9)
 
 
 class TimestampTest(unittest.TestCase):

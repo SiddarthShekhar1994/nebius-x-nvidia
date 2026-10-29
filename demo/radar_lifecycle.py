@@ -80,11 +80,11 @@ def run_scenario() -> dict:
             history = opportunity_history(conn, candidate.id)
 
         if (opportunity_count, observation_count, len(history), len(telegram.messages_by_key),
-                len(calendar.events_by_key)) != (1, 2, 2, 1, 0):
-            raise AssertionError("scenario should deduplicate the posting and send one digest")
+                len(calendar.events_by_key)) != (1, 2, 2, 0, 0):
+            raise AssertionError("scenario should deduplicate and hold unverified postings")
         if (first.digest.status, retry.digest.status, second_day.digest.status) != (
-                "sent", "sent", "empty"):
-            raise AssertionError("scenario should freeze the retry and suppress a known posting")
+                "empty", "empty", "empty"):
+            raise AssertionError("unverified eligibility must not produce a digest")
 
         return {
             "mode": "offline-synthetic",
@@ -109,7 +109,7 @@ def run_scenario() -> dict:
                  "digest": first.digest.status},
                 {"run_id": "scenario:day-one", "dedupe": "same_run_retry",
                  "digest": retry.digest.status},
-                {"run_id": "scenario:day-two", "dedupe": "known_candidate_not_resent",
+                {"run_id": "scenario:day-two", "dedupe": "known_candidate_held_unverified",
                  "digest": second_day.digest.status},
             ],
             "counts": {

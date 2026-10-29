@@ -45,6 +45,36 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--run-id", help="daily run identity; defaults to the current UTC date")
     run.add_argument("--max-queries", type=_bounded(1, 12), default=6)
     run.add_argument("--results-per-query", type=_bounded(1, 20), default=5)
+
+    review = commands.add_parser("review", help="preview or save a human-reviewed application page")
+    review.add_argument("evidence", type=Path, help="reviewed evidence JSON file")
+    review.add_argument("--review-id", required=True, help="new immutable review ID; reuse only for exact retries")
+    review.add_argument("--reviewer", required=True)
+    review.add_argument("--profile", type=Path, default=Path(os.environ.get("KEEPER_DATA_DIR", "data")) / "memory" / "profile.md")
+    review.add_argument("--db", type=Path, default=default_db_path())
+    review.add_argument("--apply", action="store_true", help="save the review locally; no provider calls")
+
+    reviews = commands.add_parser("reviews", help="read saved source evidence and approval history")
+    reviews.add_argument("--db", type=Path, default=default_db_path())
+    reviews.add_argument("--opportunity", help="limit history to one opportunity ID")
+
+    schedule = commands.add_parser("schedule", help="preview or approve one reviewed Calendar deadline")
+    schedule.add_argument("review_id")
+    schedule.add_argument("--db", type=Path, default=default_db_path())
+    schedule.add_argument("--approve", action="store_true", help="explicitly approve this exact review revision")
+    schedule.add_argument("--reviewer")
+    schedule.add_argument("--reason")
+    schedule.add_argument("--live", action="store_true")
+    schedule.add_argument("--apply", action="store_true", help="record approval and synchronize Calendar")
+    schedule.add_argument("--secrets-dir", type=Path, default=Path("/sandbox/keeper/secrets"))
+
+    digest = commands.add_parser("digest", help="preview or deliver newly qualified reviewed candidates")
+    digest.add_argument("--db", type=Path, default=default_db_path())
+    digest.add_argument("--run-id", help="stable delivery identity for retries; defaults to the UTC date")
+    digest.add_argument("--recipient", help="Telegram chat ID; defaults to TELEGRAM_CHAT_ID")
+    digest.add_argument("--live", action="store_true")
+    digest.add_argument("--apply", action="store_true")
+    digest.add_argument("--secrets-dir", type=Path, default=Path("/sandbox/keeper/secrets"))
     return parser
 
 
@@ -79,6 +109,17 @@ def _live_adapters(secrets_dir: Path):
 def _live_telegram(secrets_dir: Path, db_path: Path):
     from integrations.telegram import LiveTelegram
     return LiveTelegram.from_token_file(secrets_dir / "telegram-bot.key", db_path)
+
+
+def _live_calendar(secrets_dir: Path, db_path: Path):
+    from integrations.calendar import LiveCalendar
+    return LiveCalendar.from_token_file(secrets_dir / "google-token.json", db_path)
+
+
+def _read_connection(path: Path) -> sqlite3.Connection:
+    if not path.is_file():
+        raise ValueError("Keeper database does not exist")
+    return sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=10)
 
 
 def _copy_database(source_path: Path, destination_path: Path) -> None:
@@ -117,7 +158,7 @@ def _report(result, *, mode: str, source: str, run_id: str) -> dict:
         "opportunities": _json_value(result.radar.results.opportunities),
         "skipped": _json_value(result.radar.results.skipped),
         "digest": {
-            "status": digest.status if mode == "apply" else ("preview" if digest.text else "empty"),
+            "status": digest.status if mode == "apply" else ("preview" if digest.text else digest.status),
             "text": digest.text,
             "opportunity_ids": list(digest.opportunity_ids),
             "message_id": digest.message_id if mode == "apply" else None,
@@ -179,7 +220,8 @@ def _run(args: argparse.Namespace) -> int:
                     preview_telegram = FakeTelegram()
                 result = run_daily_radar(
                     preview_db, profile, tavily, model, preview_telegram,
-                    recipient_reference="preview", run_id=run_id, now=now,
+                    recipient_reference=(recipient.strip() or "preview") if args.live else "preview",
+                    run_id=run_id, now=now,
                     max_queries=args.max_queries, results_per_query=args.results_per_query,
                 )
                 report = _report(result, mode="preview",
@@ -191,10 +233,110 @@ def _run(args: argparse.Namespace) -> int:
         return 2
 
 
+def _review(args: argparse.Namespace) -> int:
+    from keeper_core.db import migrate
+    from keeper_core.posting_reviews import load_posting_evidence, preview_posting_review, save_posting_review
+    evidence = load_posting_evidence(args.evidence)
+    profile = load_profile(args.profile)
+    with closing(_read_connection(args.db)) as conn:
+        result = preview_posting_review(conn, profile, evidence)
+    if args.apply:
+        migrate(args.db)
+        with closing(sqlite3.connect(args.db, timeout=10)) as conn, conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("BEGIN IMMEDIATE")
+            report = save_posting_review(
+                conn, profile, evidence, review_id=args.review_id,
+                reviewed_by=args.reviewer, now=datetime.now(timezone.utc),
+            )
+    else:
+        report = {"id": args.review_id, "opportunity_id": evidence.opportunity_id,
+                  "source_url": evidence.source_url, "source_excerpt": evidence.source_excerpt,
+                  "reviewed_by": args.reviewer, "eligibility": result.eligibility,
+                  "eligibility_reason": result.eligibility_reason,
+                  "deadline_at": evidence.deadline.deadline_at if evidence.deadline else None}
+    print(json.dumps(_json_value({"mode": "applied" if args.apply else "preview", "review": report}), indent=2))
+    return 0
+
+
+def _schedule(args: argparse.Namespace) -> int:
+    from keeper_core.posting_calendar import calendar_review_plan, schedule_reviewed_deadline
+    if args.apply and not (
+        args.live and args.approve and args.reviewer and args.reviewer.strip()
+        and args.reason and args.reason.strip()
+        and len(args.reviewer) <= 200 and len(args.reason) <= 1000
+    ):
+        print("keeper radar: scheduling requires --live --apply --approve --reviewer and --reason", file=sys.stderr)
+        return 2
+    now = datetime.now(timezone.utc)
+    with closing(_read_connection(args.db)) as conn:
+        plan = calendar_review_plan(conn, args.review_id, now=now)
+    if args.apply and plan["action"] != "review":
+        calendar = _live_calendar(args.secrets_dir, args.db)
+        result = schedule_reviewed_deadline(
+            args.db, calendar, args.review_id,
+            approved_by=args.reviewer, reason=args.reason, now=now,
+        )
+        report = {"mode": "apply", "calendar": result}
+    else:
+        report = {"mode": "preview", "calendar": plan}
+    print(json.dumps(_json_value(report), indent=2))
+    return 0
+
+
+def _digest(args: argparse.Namespace) -> int:
+    from keeper_core.db import migrate
+    from keeper_core.fakes import FakeTelegram
+    from keeper_core.radar_digest import send_radar_digest
+    recipient = args.recipient or os.environ.get("TELEGRAM_CHAT_ID", "")
+    if args.apply and not (args.live and recipient.strip()):
+        print("keeper radar: delivery requires --live --apply and --recipient or TELEGRAM_CHAT_ID", file=sys.stderr)
+        return 2
+    now = datetime.now(timezone.utc)
+    run_id = args.run_id if args.run_id is not None else f"radar:{now.date().isoformat()}"
+    if not run_id.strip():
+        raise ValueError("run ID must not be empty")
+    with closing(_read_connection(args.db)) as conn:
+        conn.execute("SELECT id FROM opportunities LIMIT 1").fetchone()
+    def deliver(path, telegram):
+        migrate(path)
+        with closing(sqlite3.connect(path, timeout=10)) as conn:
+            return send_radar_digest(conn, telegram, run_id=run_id,
+                                     recipient_reference=recipient.strip() or "preview", now=now)
+    if args.apply:
+        result = deliver(args.db, _live_telegram(args.secrets_dir, args.db))
+    else:
+        with tempfile.TemporaryDirectory(prefix="keeper-radar-digest-") as directory:
+            temporary = Path(directory) / "keeper.db"
+            _copy_database(args.db, temporary)
+            result = deliver(temporary, FakeTelegram())
+    report = {"mode": "apply" if args.apply else "preview", "run_id": run_id,
+              "digest": {"status": result.status if args.apply or not result.text else "preview",
+                         "text": result.text, "opportunity_ids": result.opportunity_ids,
+                         "message_id": result.message_id if args.apply else None}}
+    print(json.dumps(_json_value(report), indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
-    return _run(args)
+    if args.command == "run":
+        return _run(args)
+    try:
+        if args.command == "review":
+            return _review(args)
+        if args.command == "schedule":
+            return _schedule(args)
+        if args.command == "digest":
+            return _digest(args)
+        from keeper_core.posting_reviews import list_posting_reviews
+        with closing(_read_connection(args.db)) as conn:
+            print(json.dumps(_json_value(list_posting_reviews(conn, args.opportunity)), indent=2))
+        return 0
+    except Exception as exc:
+        _print_error(exc)
+        return 2
 
 
 if __name__ == "__main__":

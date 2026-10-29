@@ -1,0 +1,12 @@
+{
+  "opportunity_id": "replace-with-the-discovered-opportunity-id",
+  "source_url": "https://careers.example.test/jobs/software-engineer-intern",
+  "source_excerpt": "Software Engineer Intern at Example Inc. Requirements: graduation in 2027, Computer Science major, based in the United States. This is the complete requirements section. Applications close 2026-12-10T17:00:00-08:00.",
+  "requirements": {
+    "complete": true,
+    "graduation_years": [2027],
+    "majors": ["Computer Science"],
+    "locations": ["United States"]
+  },
+  "deadline_timestamp": "2026-12-10T17:00:00-08:00"
+}
