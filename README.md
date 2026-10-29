@@ -1,5 +1,7 @@
 # Keeper
 
+[![tests](https://github.com/SiddarthShekhar1994/nebius-x-nvidia/actions/workflows/tests.yml/badge.svg)](https://github.com/SiddarthShekhar1994/nebius-x-nvidia/actions/workflows/tests.yml)
+
 Keeper is an always-on personal assistant for students, built for the Personal AI track of the Nebius x NVIDIA Global AI Hackathon. It reads a demo inbox and calendar, keeps an eye out for internships and hackathons, and reports back over Telegram. When you correct it, it writes the correction down as a skill so it doesn't make the same mistake twice.
 
 It runs as a Hermes agent inside NVIDIA OpenShell, set up with NemoClaw. Inference goes to Nemotron 3 models (Nano, Super and Ultra) on Nebius Token Factory.
@@ -29,7 +31,7 @@ It runs as a Hermes agent inside NVIDIA OpenShell, set up with NemoClaw. Inferen
 | `demo/` | Synthetic demo inbox, seeding tools and scenarios. Never real inbox content. |
 | `docs/` | Setup steps, plans and phase reports |
 | `scripts/` | Developer utilities, including Google authorization and the Token Factory probe |
-| `tests/` | Offline tests: `python -m unittest discover -s tests` |
+| `tests/` | Offline tests: `python -m unittest discover -s tests`. CI runs them on every pull request and push to `main` (Python 3.12 and 3.13 on Ubuntu, 3.14 on Windows), plus pyflakes and a shell syntax check |
 
 ## Setup
 
