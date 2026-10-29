@@ -52,7 +52,8 @@ class DeadlineReviewPolicy:
 
 _CUE = re.compile(
     r"\b(?:deadline|due|apply by|submit by|applications? clos(?:e|es)|"
-    r"rsvp by|respond by)\b", re.IGNORECASE,
+    r"rsvp by|respond by|register for\b[^.!?\n]{0,80}\bbefore|"
+    r"requires? an acceptance response by)\b", re.IGNORECASE,
 )
 _EXPLICIT = re.compile(
     r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?"
@@ -67,7 +68,7 @@ _NATURAL = re.compile(
     r"(?:\s+(?:Pacific|Eastern|Central|Mountain|UTC|PST|PDT|EST|EDT))?\b",
     re.IGNORECASE,
 )
-_IANA = re.compile(r"^\s+([A-Za-z_]+/[A-Za-z_]+)")
+_IANA = re.compile(r"^\s+([A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)+)(?![A-Za-z0-9_+/-])")
 _VAGUE_ZONE = re.compile(r"^\s+(?:PST|PDT|EST|EDT|Pacific|Eastern|Central|Mountain|local time)\b", re.IGNORECASE)
 _VAGUE_ZONE_ANYWHERE = re.compile(
     r"\b(?:PST|PDT|EST|EDT|Pacific|Eastern|Central|Mountain|local time)\b", re.IGNORECASE,
@@ -144,23 +145,14 @@ def _tokens(text: str):
     yield from sorted(tokens, key=lambda item: item[1].start())
 
 
-def extract_deadline_candidates(
-    email: EmailRecord, triage: TriageResult, *, now: datetime,
+def source_deadline_candidates(
+    source_email_id: str, subject: str, body_excerpt: str, source_reference: str | None, *, now: datetime,
 ) -> tuple[DeadlineCandidate, ...]:
-    """Collect deadline-like dates from relevant mail without inferring missing facts."""
+    """Parse source fields into deadline candidates without triage or aggregate flags."""
     _utc(now, "now")
-    if triage.email_id != email.id:
-        raise ValueError("triage result belongs to another email")
-    if triage.career is False or triage.bucket in (TriageBucket.JUNK, TriageBucket.NEWSLETTER):
-        return ()
-    relevance_flags = []
-    if triage.career is not True:
-        relevance_flags.append("relevance_unverified")
-    if triage.bucket is None:
-        relevance_flags.append("triage_review")
     candidates = []
-    subject_has_cue = _CUE.search(email.subject) is not None
-    for field, text in (("subject", email.subject), ("body_excerpt", email.body_excerpt)):
+    subject_has_cue = _CUE.search(subject) is not None
+    for field, text in (("subject", subject), ("body_excerpt", body_excerpt)):
         for kind, match in _tokens(text):
             prefix = text[max(0, match.start() - 100):match.start()]
             cue_matches = list(_CUE.finditer(prefix))
@@ -183,10 +175,33 @@ def extract_deadline_candidates(
             evidence_end = min(len(text), match.end() + 60)
             evidence = text[evidence_start:evidence_end].strip()
             candidates.append(DeadlineCandidate(
-                stable_key("deadline-candidate", email.id, field, str(match.start()), raw),
-                email.id, field, email.raw_link_reference or email.id,
-                raw, evidence, deadline_at, tuple(dict.fromkeys((*flags, *relevance_flags))),
+                stable_key("deadline-candidate", source_email_id, field, str(match.start()), raw),
+                source_email_id, field, source_reference or source_email_id,
+                raw, evidence, deadline_at, tuple(dict.fromkeys(flags)),
             ))
+    return tuple(candidates)
+
+
+def extract_deadline_candidates(
+    email: EmailRecord, triage: TriageResult, *, now: datetime,
+) -> tuple[DeadlineCandidate, ...]:
+    """Collect deadline-like dates from relevant mail without inferring missing facts."""
+    _utc(now, "now")
+    if triage.email_id != email.id:
+        raise ValueError("triage result belongs to another email")
+    if triage.career is False or triage.bucket in (TriageBucket.JUNK, TriageBucket.NEWSLETTER):
+        return ()
+    relevance_flags = []
+    if triage.career is not True:
+        relevance_flags.append("relevance_unverified")
+    if triage.bucket is None:
+        relevance_flags.append("triage_review")
+    candidates = [
+        replace(candidate, flags=tuple(dict.fromkeys((*candidate.flags, *relevance_flags))))
+        for candidate in source_deadline_candidates(
+            email.id, email.subject, email.body_excerpt, email.raw_link_reference, now=now,
+        )
+    ]
     if len(candidates) > 1:
         candidates = [replace(candidate, flags=(*candidate.flags, "multiple_candidates"))
                       for candidate in candidates]

@@ -1,6 +1,8 @@
+import json
 import unittest
 from dataclasses import replace
 from datetime import datetime, timezone
+from pathlib import Path
 
 from keeper_core.contracts import EmailRecord, IngestionMetadata, TriageBucket, TriageResult
 from keeper_core.deadlines import (
@@ -37,6 +39,34 @@ class DeadlineCandidateTest(unittest.TestCase):
         self.assertEqual(validated_deadline_at(candidate, now=NOW),
                          datetime(2026, 11, 2, 17, 30, tzinfo=timezone.utc))
 
+    def test_register_and_acceptance_response_deadline_cues_are_narrow(self):
+        for body in (
+            "Register for the fictional student hackathon before 2026-11-02T09:30:00Z.",
+            "The program requires an acceptance response by 2026-11-02T09:30:00Z.",
+        ):
+            with self.subTest(body=body):
+                source = email(body, subject="Fictional program information")
+                candidates = extract_deadline_candidates(source, triage(source), now=NOW)
+                self.assertEqual(len(candidates), 1)
+                self.assertEqual(candidates[0].flags, ())
+        generic = email("Register online before asking about the 2026-11-02T09:30:00Z event.",
+                        subject="Fictional program information")
+        self.assertEqual(extract_deadline_candidates(generic, triage(generic), now=NOW), ())
+
+    def test_fixture_deadlines_match_source_candidates(self):
+        fixture = Path(__file__).resolve().parents[1] / "demo/fixtures/inbox_75.json"
+        messages = json.loads(fixture.read_text(encoding="utf-8"))["emails"]
+        due = [item for item in messages if item["gold"]["deadline"]]
+        self.assertTrue(due)
+        for item in due:
+            with self.subTest(email_id=item["id"]):
+                source = email(item["body_text"], subject=item["subject"])
+                result = triage(source, career=item["gold"]["career"],
+                                bucket=TriageBucket(item["gold"]["bucket"]))
+                candidates = extract_deadline_candidates(source, result, now=NOW)
+                expected = datetime.fromisoformat(item["gold"]["deadline"].replace("Z", "+00:00"))
+                self.assertEqual([candidate.deadline_at for candidate in candidates], [expected])
+
     def test_date_only_and_missing_timezone_need_review(self):
         source = email("Apply by 2026-11-02. Submit by 2026-11-03T09:30.")
         candidates = extract_deadline_candidates(source, triage(source), now=NOW)
@@ -71,6 +101,15 @@ class DeadlineCandidateTest(unittest.TestCase):
         self.assertEqual(candidate.flags, ())
         self.assertEqual(validated_deadline_at(candidate, now=NOW),
                          datetime(2026, 11, 2, 17, 30, tzinfo=timezone.utc))
+        regional = email("Apply by 2026-11-02T09:30 America/Indiana/Indianapolis.")
+        candidate = extract_deadline_candidates(regional, triage(regional), now=NOW)[0]
+        self.assertEqual(candidate.flags, ())
+        self.assertEqual(validated_deadline_at(candidate, now=NOW),
+                         datetime(2026, 11, 2, 14, 30, tzinfo=timezone.utc))
+        invalid_zone = email("Apply by 2026-11-02T09:30 America/Los_Angeles/.")
+        candidate = extract_deadline_candidates(invalid_zone, triage(invalid_zone), now=NOW)[0]
+        with self.assertRaises(DeadlineReviewRequired):
+            validated_deadline_at(candidate, now=NOW)
         vague_label = email("Apply by 2026-11-01T09:30:00-07:00 Pacific.")
         candidate = extract_deadline_candidates(vague_label, triage(vague_label), now=NOW)[0]
         self.assertIn("timezone_label_unverified", candidate.flags)

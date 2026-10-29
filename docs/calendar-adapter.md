@@ -12,4 +12,17 @@ When an application ID is linked, Calendar creations and moves are appended to `
 
 Every event carries a hashed Keeper deadline ID in Calendar private extended properties. Before creation, the adapter searches for that marker, including subsequent pages. It also supplies a deterministic Google event ID, so a repeated insert can recover from a 409 collision. After an uncertain insert failure, call again with the same event ID and idempotency key; the adapter searches before another attempt. It never blindly retries an insert. It patches an existing event only when the summary or deadline differs. Conflicting mappings or an event with the wrong Keeper marker stop with `IdempotencyConflict`.
 
+Before writing an event, synchronization re-extracts candidates from the full
+stored email and checks the candidate's identity, timestamp, and evidence. Multiple
+deadlines, subject-only context, and unresolved timezones still require review
+even if a caller cleared the candidate's flags. The existing review policy can
+still confirm an uncertain date or select one of multiple deadlines.
+Callers must preserve the candidate's triage relevance flags; source re-extraction
+does not reclassify the email.
+
+Run `python3 -m demo.calendar_lifecycle` from the repository root for a synthetic,
+offline create, extend, and replay trace. It uses a fixed clock, a temporary
+database, and the existing fake Calendar. Both emails use the same provider event
+ID; the extension's source evidence is retained in application activity.
+
 Searches, reads, and idempotent patches use bounded backoff for 429, Calendar rate quota responses, and transient 5xx. Inserts surface uncertain errors. The offline tests use a fake Calendar API service with real SQLite storage; no live account has been tested.
