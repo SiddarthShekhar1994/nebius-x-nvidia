@@ -1,0 +1,87 @@
+{
+  "version": 2,
+  "synthetic": true,
+  "window_start": "2026-10-27",
+  "window_end": "2026-10-29",
+  "display_timezone": "America/Los_Angeles",
+  "emails": [
+    {
+      "id": "story-01",
+      "thread_id": "story-thread-01",
+      "sender": "Example Inc Recruiting <recruiting@careers.example.test>",
+      "recipient": "student@example.test",
+      "subject": "[SYNTHETIC] Application received: Software Engineer Intern",
+      "received_at": "2026-10-27T16:05:00Z",
+      "body_text": "Thank you for applying to Example Inc. We received your application for Software Engineer Intern, a summer 2027 internship.",
+      "labels": [
+        "INBOX",
+        "KEEPER_DEMO"
+      ],
+      "gold": {
+        "bucket": "actionable",
+        "career": true,
+        "scam_signals": [],
+        "deadline": null,
+        "application_transition": "applied",
+        "scenario": "Tracked application confirmed",
+        "notes": "Names the tracked organization and role; moves the application to applied.",
+        "scam_flag": false,
+        "deadline_evidence": null,
+        "previous_deadline": null,
+        "expected_application_change": "found -> applied"
+      }
+    },
+    {
+      "id": "story-02",
+      "thread_id": "story-thread-02",
+      "sender": "Example Inc Recruiting <recruiting@careers.example.test>",
+      "recipient": "student@example.test",
+      "subject": "[SYNTHETIC] Interview invitation: Software Engineer Intern",
+      "received_at": "2026-10-28T17:20:00Z",
+      "body_text": "Example Inc would like to interview you for Software Engineer Intern. Please reply with two times that work for you next week.",
+      "labels": [
+        "INBOX",
+        "KEEPER_DEMO"
+      ],
+      "gold": {
+        "bucket": "actionable",
+        "career": true,
+        "scam_signals": [],
+        "deadline": null,
+        "application_transition": "interview",
+        "scenario": "Tracked interview invitation",
+        "notes": "Moves the application to interview; deserves an unsent reply draft.",
+        "scam_flag": false,
+        "deadline_evidence": null,
+        "previous_deadline": null,
+        "expected_application_change": "applied -> interview"
+      }
+    },
+    {
+      "id": "story-03",
+      "thread_id": "story-thread-03",
+      "sender": "Example Inc Recruiting <recruiting@careers.example.test>",
+      "recipient": "student@example.test",
+      "subject": "[SYNTHETIC] Take-home assignment: Software Engineer Intern",
+      "received_at": "2026-10-29T15:10:00Z",
+      "body_text": "Example Inc: the take-home assignment for your Software Engineer Intern internship application is due 2026-11-06T17:00:00Z.",
+      "labels": [
+        "INBOX",
+        "KEEPER_DEMO"
+      ],
+      "gold": {
+        "bucket": "due",
+        "career": true,
+        "scam_signals": [],
+        "deadline": "2026-11-06T17:00:00Z",
+        "application_transition": null,
+        "scenario": "Tracked deadline",
+        "notes": "One calendar event for the tracked application; not a status change.",
+        "scam_flag": false,
+        "deadline_evidence": "2026-11-06T17:00:00Z",
+        "previous_deadline": null,
+        "expected_application_change": null
+      }
+    }
+  ]
+}

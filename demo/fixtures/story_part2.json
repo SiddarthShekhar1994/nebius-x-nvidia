@@ -1,0 +1,64 @@
+{
+  "version": 2,
+  "synthetic": true,
+  "window_start": "2026-10-29",
+  "window_end": "2026-10-29",
+  "display_timezone": "America/Los_Angeles",
+  "emails": [
+    {
+      "id": "story-04",
+      "thread_id": "story-thread-04",
+      "sender": "Example Inc Recruiting <recruiting@careers.example.test>",
+      "recipient": "student@example.test",
+      "subject": "[SYNTHETIC] Deadline extended: Software Engineer Intern take-home",
+      "received_at": "2026-10-29T19:40:00Z",
+      "body_text": "Example Inc: your Software Engineer Intern internship take-home deadline has been extended to 2026-11-13T17:00:00Z.",
+      "labels": [
+        "INBOX",
+        "KEEPER_DEMO"
+      ],
+      "gold": {
+        "bucket": "due",
+        "career": true,
+        "scam_signals": [],
+        "deadline": "2026-11-13T17:00:00Z",
+        "application_transition": null,
+        "scenario": "Tracked deadline extension",
+        "notes": "Moves the existing calendar event; never creates a second one.",
+        "scam_flag": false,
+        "deadline_evidence": "2026-11-13T17:00:00Z",
+        "previous_deadline": "2026-11-06T17:00:00Z",
+        "expected_application_change": null
+      }
+    },
+    {
+      "id": "story-05",
+      "thread_id": "story-thread-05",
+      "sender": "Example Inc Offer Desk <offers@example-inc-hiring.example.test>",
+      "recipient": "student@example.test",
+      "subject": "[SYNTHETIC] Secure your Software Engineer Intern offer",
+      "received_at": "2026-10-29T20:55:00Z",
+      "body_text": "Pay the $75 processing fee today to secure your Example Inc internship offer for Software Engineer Intern. Reply with your card number.",
+      "labels": [
+        "INBOX",
+        "KEEPER_DEMO"
+      ],
+      "gold": {
+        "bucket": "actionable",
+        "career": true,
+        "scam_signals": [
+          "upfront_fee",
+          "urgency"
+        ],
+        "deadline": null,
+        "application_transition": null,
+        "scenario": "Recruiter impersonation scam",
+        "notes": "Impersonates the tracked employer; scam warning, and no tracker change, event or draft.",
+        "scam_flag": true,
+        "deadline_evidence": null,
+        "previous_deadline": null,
+        "expected_application_change": null
+      }
+    }
+  ]
+}

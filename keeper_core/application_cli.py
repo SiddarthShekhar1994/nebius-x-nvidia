@@ -1,4 +1,4 @@
-"""Read application state and apply explicit, auditable user corrections."""
+"""Track an opportunity, read application state, and apply explicit, auditable user corrections."""
 from __future__ import annotations
 
 import argparse
@@ -9,18 +9,35 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .applications import apply_manual_correction, get_application, list_applications
+from .applications import apply_manual_correction, create_application, get_application, list_applications
 from .application_activity import activity_for_application
-from .contracts import ApplicationStatus
+from .contracts import ApplicationStatus, Eligibility, Opportunity
 from .db import default_db_path, migrate
+from .ingest import insert_opportunity_once
 from .time import to_storage
-from .workflow import TransitionConflict
+from .workflow import TransitionConflict, canonical_url, opportunity_key, stable_key
+
+
+def _utc_instant(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise argparse.ArgumentTypeError("expected a UTC time like 2026-10-26T12:00:00Z") from None
+    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
+        raise argparse.ArgumentTypeError("expected a UTC time like 2026-10-26T12:00:00Z")
+    return parsed.replace(tzinfo=timezone.utc)
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="List applications, inspect history, or apply a user correction")
     parser.add_argument("--db", type=Path, default=default_db_path(), help="Keeper SQLite database")
     sub = parser.add_subparsers(dest="command", required=True)
+    add = sub.add_parser("add", help="track an opportunity so emails that name it update its application")
+    add.add_argument("--organization", required=True, help="as emails about it name the organization")
+    add.add_argument("--title", required=True, help="the role, as emails about it name it")
+    add.add_argument("--url", required=True, help="the posting's page")
+    add.add_argument("--found-at", type=_utc_instant,
+                     help="when you found it (UTC, default now); emails dated before it never move the application")
     sub.add_parser("list", help="list tracked applications")
     sub.add_parser("telegram", help="read-only plain-text summary for the /apps gateway command")
     history = sub.add_parser("history", help="show all evidence and transitions for one application")
@@ -78,6 +95,28 @@ def _history(conn: sqlite3.Connection, app) -> dict:
     return result
 
 
+def _add(args: argparse.Namespace) -> dict:
+    """One tracked opportunity and its application; rerunning returns the same pair."""
+    organization, title = args.organization.strip(), args.title.strip()
+    if not organization or not title:
+        raise ValueError("organization and title are required")
+    url = canonical_url(args.url)
+    now = datetime.now(timezone.utc)
+    found_at = args.found_at or now
+    if found_at > now:
+        raise ValueError("--found-at can't be in the future")
+    migrate(args.db)
+    with closing(sqlite3.connect(args.db)) as conn, conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("BEGIN IMMEDIATE")
+        opportunity_id = insert_opportunity_once(conn, Opportunity(
+            stable_key("manual-opportunity", url), opportunity_key(url, organization, title), url,
+            organization, title, "manual", found_at, None, None, Eligibility.UNVERIFIED, None, None,
+        ))
+        app = create_application(conn, opportunity_id, created_at=found_at, source_evidence=url)
+        return _summary(conn, app)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "telegram":
@@ -89,7 +128,9 @@ def main(argv: list[str] | None = None) -> int:
             print("Application tracker is not ready.")
         return 0
     try:
-        if args.command == "correct":
+        if args.command == "add":
+            result = _add(args)
+        elif args.command == "correct":
             if not args.approve:
                 raise ValueError("manual correction requires --approve")
             if (args.status == "decision") != bool(args.outcome and args.outcome.strip()):
