@@ -19,7 +19,7 @@ Visitors can play the demo story (one internship, five emails: an application, a
 
 The page is `space/` in the repository: `engine.py` drives Keeper's triage and `keeper act` steps, and `server.py` is a standard-library web server with a page in `static/`.
 
-1. Create a Docker Space (blank template, free CPU, public).
+1. Create a Docker Space (blank template, public). Hugging Face charges for Docker Spaces; any host that builds a Dockerfile works the same way.
 2. Upload `space/Dockerfile` and `space/README.md` from the repository to the Space's root.
 3. In the Space's settings, add a secret named `TOKENFACTORY_API_KEY`. Use a key made just for the demo, so you can revoke it on its own.
 
