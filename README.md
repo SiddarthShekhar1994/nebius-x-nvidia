@@ -12,6 +12,7 @@ It runs as a Hermes agent inside NVIDIA OpenShell, set up with NemoClaw. Inferen
 - **Inbox triage:** 74 of 75 correct live with Nemotron 3 Nano on the synthetic demo inbox (prompt triage-v3): every deadline extracted exactly, no career email ever sent to junk, and every scam email flagged by the built-in checks. Labels go to Gmail only with `--apply`. See the [triage guide](triage/README.md) and the [acceptance report](docs/phase4-triage-report.md).
 - **Tracker, calendar deadlines and reply drafts:** built and tested offline with fakes. `keeper act` runs them on saved triage results, and `keeper apps` shows the tracker. See [actions/README.md](actions/README.md) and [docs/calendar-adapter.md](docs/calendar-adapter.md).
 - **Opportunity radar:** search, scoring, eligibility and deduplication are built; it has no command yet. See [docs/radar-discovery.md](docs/radar-discovery.md).
+- **Live demo:** a public page that runs Keeper's real triage, tracker, calendar and draft steps on Nemotron through Token Factory, with in-memory Gmail and Calendar so visitors need no account. See [space/README.md](space/README.md).
 - **Evidence dashboard:** a self-contained HTML report generated from Keeper's databases. See [dashboard/README.md](dashboard/README.md).
 - **Still to do:** live runs against the demo Gmail account, the OpenShell network lockdown with the injection demo, scheduling, and the demo video.
 
@@ -29,6 +30,7 @@ It runs as a Hermes agent inside NVIDIA OpenShell, set up with NemoClaw. Inferen
 | `memory/` | Long-term memory store (markdown files on the sandbox's persistent volume) |
 | `dashboard/` | Evidence report: triage, tracker, model usage and cost, evaluation |
 | `demo/` | Synthetic demo inbox, seeding tools and scenarios. Never real inbox content. |
+| `space/` | The hosted live demo (a Hugging Face Space): the demo story and visitors' own emails through Keeper's code on live Nemotron, with stand-in Gmail and Calendar |
 | `docs/` | Setup steps, plans and phase reports |
 | `scripts/` | Developer utilities, including Google authorization and the Token Factory probe |
 | `tests/` | Offline tests: `python -m unittest discover -s tests`. CI runs them on every pull request and push to `main` (Python 3.12 and 3.13 on Ubuntu, 3.14 on Windows), plus pyflakes and a shell syntax check |

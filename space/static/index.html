@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keeper live demo</title>
+<meta name="description" content="Keeper sorts a student's inbox, tracks applications, schedules deadlines and drafts replies, running live on NVIDIA Nemotron 3 through Nebius Token Factory.">
+<link rel="stylesheet" href="app.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<main class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Keeper · live demo</p>
+    <h1>Your inbox, sorted and acted on.</h1>
+    <p class="lede">Keeper is a personal assistant for students. It sorts email, tracks internship and job applications, puts deadlines on the calendar and drafts replies for you to send yourself. This page runs Keeper's real code. NVIDIA Nemotron 3 models on Nebius Token Factory make every call.</p>
+    <ul class="facts">
+      <li id="live-fact"><span class="dot"></span><span id="live-text">Checking the model connection</span></li>
+      <li><span class="dot quiet"></span>Gmail and Google Calendar are stand-ins kept in memory, so you don't connect an account and nothing is ever sent.</li>
+      <li><span class="dot quiet"></span><span id="clock-text">The demo clock is set to the week of the story.</span></li>
+    </ul>
+  </header>
+
+  <section class="panel story" aria-labelledby="story-title">
+    <h2 id="story-title">The story: one internship, five emails</h2>
+    <ol class="steps">
+      <li id="step-track"><button type="button" class="btn" id="track">1. Track the internship</button><span>Example Inc, Software Engineer Intern. You found it on Oct 26.</span></li>
+      <li id="step-part1"><button type="button" class="btn" id="part1" disabled>2. Three emails arrive</button><span>Application received, an interview invitation, and a take-home due Nov 6.</span></li>
+      <li id="step-part2"><button type="button" class="btn" id="part2" disabled>3. Two more arrive</button><span>The take-home deadline moves to Nov 13, and a fake recruiter asks for a fee.</span></li>
+    </ol>
+    <p id="notice" class="notice" role="status" hidden></p>
+  </section>
+
+  <div class="grid">
+    <section class="inbox" aria-labelledby="inbox-title">
+      <h2 id="inbox-title">Inbox</h2>
+      <p id="inbox-empty" class="muted">Emails show up here as they arrive, newest first, each with what Keeper decided and what it did.</p>
+      <div id="cards" aria-live="polite"></div>
+    </section>
+    <aside class="side">
+      <section class="panel"><h2>Tracker</h2><div id="tracker"></div></section>
+      <section class="panel"><h2>Calendar</h2><div id="calendar"></div></section>
+      <section class="panel"><h2>Drafts</h2><div id="drafts"></div></section>
+      <section class="panel"><h2>Model calls this visit</h2><div id="usage"></div></section>
+    </aside>
+  </div>
+
+  <section class="panel write" aria-labelledby="write-title">
+    <h2 id="write-title">Send Keeper your own email</h2>
+    <p class="muted">Keeper only moves the tracker when an email names a company and role you track, so run step 1 first. It only schedules explicit times such as 2026-11-20T17:00:00Z, and it never acts on mail with scam warnings. Don't paste real or private email: the text goes to the model.</p>
+    <form id="write" novalidate>
+      <label for="preset">Start from</label>
+      <select id="preset"></select>
+      <label for="sender">From</label>
+      <input id="sender" maxlength="200" autocomplete="off">
+      <label for="subject">Subject</label>
+      <input id="subject" maxlength="200" autocomplete="off">
+      <label for="body">Body</label>
+      <textarea id="body" maxlength="1500" rows="5"></textarea>
+      <div class="row">
+        <button type="submit" class="btn" id="send">Send to Keeper</button>
+        <span class="muted" id="write-note"></span>
+      </div>
+    </form>
+  </section>
+
+  <footer>
+    <p>The real Keeper runs as a Hermes agent inside an NVIDIA OpenShell sandbox, set up with NemoClaw, on a real Gmail inbox and Google Calendar. The sandbox's network policy lets it read mail, add labels and save drafts, and blocks sending. Every email on this page is synthetic or written by you, and each visit gets its own temporary copy of Keeper.</p>
+    <p><a href="https://github.com/SiddarthShekhar1994/nebius-x-nvidia">Source code on GitHub</a> · <button type="button" class="link" id="reset">Start over</button></p>
+  </footer>
+</main>
+</body>
+</html>
